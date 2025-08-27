@@ -260,13 +260,26 @@ This project is provided as-is for educational and personal use.
 
 ## 🚀 Deployment
 
-### Static Hosting (Recommended)
+### 🌐 Live Demo
+**[Try Quiz Master Live!](https://tultuldey128.github.io/quiz-master)**
+
+### GitHub Pages (Automatic)
+This project is configured for automatic deployment to GitHub Pages:
+
+1. **Push to main/master branch** - Automatic deployment via GitHub Actions
+2. **Manual deployment**:
+   ```bash
+   npm run build      # Build for production
+   npm run deploy     # Deploy to GitHub Pages
+   ```
+
+### Static Hosting (Alternative)
 1. Run `npm run build`
 2. Upload the `build` folder to any static hosting service:
    - Netlify
    - Vercel
-   - GitHub Pages
    - Firebase Hosting
+   - Surge.sh
 
 ### Local Deployment
 The application runs entirely in the browser and requires no server-side components.
