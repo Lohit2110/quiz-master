@@ -1,0 +1,234 @@
+/* Custom styles for Quiz components */
+
+/* Progress bar styles */
+.custom-progress {
+  height: 8px !important;
+}
+
+.progress-fill {
+  transition: width 0.3s ease;
+}
+
+/* Image styles */
+.question-image {
+  max-width: 100%;
+  max-height: 350px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 2px solid #dee2e6;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.question-image-full {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 2px solid #dee2e6;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.admin-image-preview {
+  max-width: 300px;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* Question text styling */
+.question-number {
+  font-size: 1.3rem;
+  line-height: 1.4;
+}
+
+.question-text {
+  font-size: 1.1rem;
+  color: #495057;
+}
+
+/* Option button styling */
+.option-button {
+  min-height: 60px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.option-button-grid {
+  min-height: 80px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.option-button:not(.btn-primary) {
+  border: 2px solid #dee2e6;
+}
+
+.option-button.btn-primary {
+  border: 2px solid #0d6efd;
+}
+
+.option-button:hover, .option-button-grid:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Option badge styling */
+.option-badge {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.option-badge-default {
+  background-color: #f8f9fa;
+  color: #495057;
+}
+
+.option-badge-selected {
+  background-color: #fff;
+  color: #0d6efd;
+}
+
+/* Option text styling */
+.option-text {
+  font-size: 16px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Grid layouts */
+.navigation-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+
+/* Navigator button styling */
+.navigator-button {
+  width: 35px;
+  height: 35px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Legend circle styling */
+.legend-circle {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+}
+
+/* File input styles */
+.file-input-hidden {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* Container max width */
+.max-width-300 {
+  max-width: 300px;
+}
+
+/* Upload area styles */
+.upload-area {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-area:hover {
+  border-color: #0d6efd;
+  background-color: #e7f1ff;
+}
+
+/* Icon circle styles */
+.icon-circle {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+/* Badge styles */
+.custom-badge {
+  color: white;
+  text-decoration: none;
+}
+
+/* Input prefix styles */
+.input-prefix {
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  color: #6c757d;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+/* Form styles */
+.large-font {
+  font-size: 1.1rem;
+}
+
+.padded-input {
+  font-size: 1.1rem;
+  padding-left: 45px;
+}
+
+.warning-card {
+  background-color: #fff3cd;
+}
+
+/* Button styles */
+.gradient-button {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border: none;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+/* Responsive styles */
+@media (max-width: 991.98px) {
+  .question-image {
+    max-height: 250px;
+  }
+  
+  .question-number {
+    font-size: 1.2rem;
+  }
+  
+  .question-text {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .question-image {
+    max-height: 200px;
+  }
+  
+  .option-button {
+    min-height: 50px;
+  }
+  
+  .option-text {
+    font-size: 14px;
+  }
+}
