@@ -19,8 +19,8 @@ import { StorageUtils } from './utils/storage';
 function App() {
   // Initialize storage on app start
   useEffect(() => {
-    // Commented out to preserve existing data
-    // StorageUtils.safeInitialize();
+    // Initialize with sample data for new users
+    StorageUtils.safeInitialize();
   }, []);
 
   return (
