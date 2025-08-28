@@ -2,7 +2,7 @@
   "name": "quiz-master",
   "version": "1.0.0",
   "description": "A comprehensive quiz creator web application",
-  "homepage": "https://Lohit2110.github.io/quiz-master",
+  "homepage": ".",
   "private": true,
   "dependencies": {
     "@testing-library/jest-dom": "^5.16.4",
