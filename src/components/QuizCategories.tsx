@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 import { QuizCategory, SavedQuiz } from '../types';
 import { StorageUtils, QuizUtils } from '../utils/storage';
 
 const QuizCategories: React.FC = () => {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState<QuizCategory[]>([]);
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -66,7 +68,7 @@ const QuizCategories: React.FC = () => {
         mode: selectionMode,
         timer: timerMinutes.toString()
       });
-      window.location.href = `/quiz?${params.toString()}`;
+      navigate(`/quiz?${params.toString()}`);
     } else {
       // Start full quiz with default timer
       const params = new URLSearchParams({
@@ -74,7 +76,7 @@ const QuizCategories: React.FC = () => {
         mode: 'random',
         timer: timerMinutes.toString()
       });
-      window.location.href = `/quiz?${params.toString()}`;
+      navigate(`/quiz?${params.toString()}`);
     }
   };
 
@@ -84,7 +86,7 @@ const QuizCategories: React.FC = () => {
       savedQuiz: quizId,
       timer: customTimer ? timerMinutes.toString() : '10' // Default 10 minutes for saved quizzes
     });
-    window.location.href = `/quiz?${params.toString()}`;
+    navigate(`/quiz?${params.toString()}`);
   };
 
   const getQuestionCountForCategory = (categoryId: string): number => {

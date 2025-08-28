@@ -1,7 +1,10 @@
 import React from 'react';
 import { Container, Row, Col, Card, Button } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 
 const HomePage: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="home-page">
       {/* Hero Section */}
@@ -18,11 +21,11 @@ const HomePage: React.FC = () => {
                 test your knowledge, and track your progress with our comprehensive quiz system.
               </p>
               <div className="d-flex gap-3 justify-content-center flex-wrap">
-                <Button variant="light" size="lg" href="/quiz-categories">
+                <Button variant="light" size="lg" onClick={() => navigate('/quiz-categories')}>
                   <i className="fas fa-play me-2"></i>
                   Take a Quiz
                 </Button>
-                <Button variant="outline-light" size="lg" href="/create-quiz">
+                <Button variant="outline-light" size="lg" onClick={() => navigate('/create-quiz')}>
                   <i className="fas fa-plus-circle me-2"></i>
                   Create Quiz
                 </Button>
@@ -177,11 +180,11 @@ const HomePage: React.FC = () => {
               Join thousands of users who are already creating and taking amazing quizzes!
             </p>
             <div className="d-flex gap-3 justify-content-center flex-wrap">
-              <Button variant="primary" size="lg" href="/create-quiz">
+              <Button variant="primary" size="lg" onClick={() => navigate('/create-quiz')}>
                 <i className="fas fa-rocket me-2"></i>
                 Create Your First Quiz
               </Button>
-              <Button variant="outline-primary" size="lg" href="/quiz-categories">
+              <Button variant="outline-primary" size="lg" onClick={() => navigate('/quiz-categories')}>
                 <i className="fas fa-eye me-2"></i>
                 Explore Categories
               </Button>

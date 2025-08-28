@@ -53,22 +53,22 @@ function App() {
                   The ultimate quiz creation and management platform
                 </p>
                 <div className="d-flex justify-content-center gap-3 mb-3">
-                  <a href="/" className="text-white text-decoration-none">
+                  <span className="text-white text-decoration-none" role="button" onClick={() => window.location.href = '/'}>
                     <i className="fas fa-home me-1"></i>
                     Home
-                  </a>
-                  <a href="/quiz-categories" className="text-white text-decoration-none">
+                  </span>
+                  <span className="text-white text-decoration-none" role="button" onClick={() => window.location.href = '/quiz-categories'}>
                     <i className="fas fa-play me-1"></i>
                     Take Quiz
-                  </a>
-                  <a href="/create-quiz" className="text-white text-decoration-none">
+                  </span>
+                  <span className="text-white text-decoration-none" role="button" onClick={() => window.location.href = '/create-quiz'}>
                     <i className="fas fa-plus me-1"></i>
                     Create Quiz
-                  </a>
-                  <a href="/admin" className="text-white text-decoration-none">
+                  </span>
+                  <span className="text-white text-decoration-none" role="button" onClick={() => window.location.href = '/admin'}>
                     <i className="fas fa-cog me-1"></i>
                     Admin
-                  </a>
+                  </span>
                 </div>
                 <hr className="border-light" />
                 <small className="text-light">
