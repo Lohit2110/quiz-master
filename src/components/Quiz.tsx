@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Row, Col, Card, Button, ProgressBar, Badge } from 'react-bootstrap';
-import { QuizSession, QuizQuestion, QuizResult, SavedQuiz } from '../types';
+import { QuizSession, QuizQuestion } from '../types';
 import { StorageUtils, QuizUtils } from '../utils/storage';
 import './Quiz.css';
 
@@ -33,7 +33,7 @@ const Quiz: React.FC = () => {
 
       return () => clearInterval(timer);
     }
-  }, [timeLeft, session]);
+  }, [timeLeft, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -232,7 +232,7 @@ const Quiz: React.FC = () => {
     StorageUtils.saveCurrentSession(updatedSession);
   };
 
-  const handleSubmitQuiz = () => {
+  const handleSubmitQuiz = useCallback(() => {
     if (!session || !window.confirm('Are you sure you want to submit the quiz? You cannot change your answers after submission.')) {
       return;
     }
@@ -280,7 +280,7 @@ const Quiz: React.FC = () => {
     
     sessionStorage.setItem('quiz_results', JSON.stringify(results));
     window.location.href = '/quiz-results';
-  };
+  }, [session, selectedAnswer, currentQuestion]);
 
   if (isLoading) {
     return (

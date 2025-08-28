@@ -1,5 +1,5 @@
 import React from 'react';
-import { Container, Card, Button, Alert, Row, Col, Badge } from 'react-bootstrap';
+import { Container, Card, Button, Row, Col, Badge } from 'react-bootstrap';
 
 const SimpleAdmin: React.FC = () => {
   const [message, setMessage] = React.useState<string>('Click "Check Storage" to see your data');

@@ -38,7 +38,7 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
   useEffect(() => {
     initializeQuestions();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initializeQuestions = () => {
     const initialQuestions: QuestionFormData[] = [];
