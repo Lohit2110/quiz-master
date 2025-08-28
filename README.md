@@ -261,7 +261,7 @@ This project is provided as-is for educational and personal use.
 ## 🚀 Deployment
 
 ### 🌐 Live Demo
-**[Try Quiz Master Live!](https://tultuldey128.github.io/quiz-master)**
+**[Try Quiz Master Live!](https://Lohit2110.github.io/quiz-master)**
 
 ### GitHub Pages (Automatic)
 This project is configured for automatic deployment to GitHub Pages:
