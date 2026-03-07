@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recover and Fix TEST 6</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 { color: #667eea; margin-bottom: 10px; }
+        h2 { color: #764ba2; margin-top: 30px; }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .quiz-info {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .progress {
+            margin: 20px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Recover and Fix TEST 6</h1>
+        <p>This tool will find TEST 6 in localStorage, compress its images, and save it to Firebase.</p>
+
+        <div id="status" class="status info" style="display: none;">Loading...</div>
+        
+        <div id="progress" class="progress" style="display: none;">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill" style="width: 0%">0%</div>
+            </div>
+            <p id="progress-text" style="text-align: center; margin-top: 10px;"></p>
+        </div>
+
+        <div id="quiz-info" style="display: none;"></div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="findTest6()">1. Find TEST 6 in Browser</button>
+            <button id="compressBtn" onclick="compressTest6()" disabled>2. Compress Images</button>
+            <button id="saveBtn" onclick="saveToFirebase()" disabled>3. Save to Firebase</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, doc, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRp2rlr4WoPvq-Ut6Vs4cJAoU56qM5Y40",
+            authDomain: "quiz-web-app-109af.firebaseapp.com",
+            projectId: "quiz-web-app-109af",
+            storageBucket: "quiz-web-app-109af.firebasestorage.app",
+            messagingSenderId: "738788892598",
+            appId: "1:738788892598:web:e6c1f7f28dc09c1bbf4df1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let test6Quiz = null;
+        let compressedQuiz = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('progress-fill').style.width = percent + '%';
+            document.getElementById('progress-fill').textContent = percent + '%';
+            document.getElementById('progress-text').textContent = text;
+        }
+
+        function hideProgress() {
+            document.getElementById('progress').style.display = 'none';
+        }
+
+        function getHumanReadableSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function calculateSize(obj) {
+            return new Blob([JSON.stringify(obj)]).size;
+        }
+
+        window.findTest6 = function() {
+            showStatus('🔍 Searching for TEST 6 in localStorage...', 'info');
+            
+            try {
+                const savedQuizzes = JSON.parse(localStorage.getItem('quiz_master_saved_quizzes') || '[]');
+                console.log('Found quizzes in localStorage:', savedQuizzes.length);
+                
+                test6Quiz = savedQuizzes.find(q => 
+                    q.title && (q.title.toLowerCase().includes('test 6') || q.title.toLowerCase().includes('test6'))
+                );
+                
+                if (test6Quiz) {
+                    const size = calculateSize(test6Quiz);
+                    const sizeKB = size / 1024;
+                    const sizeMB = sizeKB / 1024;
+                    
+                    let html = '<div class="quiz-info">';
+                    html += '<h3>✅ Found TEST 6!</h3>';
+                    html += `<p><strong>Title:</strong> ${test6Quiz.title}</p>`;
+                    html += `<p><strong>Questions:</strong> ${test6Quiz.questions?.length || 0}</p>`;
+                    html += `<p><strong>Created:</strong> ${new Date(test6Quiz.createdAt).toLocaleString()}</p>`;
+                    html += `<p><strong>Current Size:</strong> ${getHumanReadableSize(size)} (${sizeMB.toFixed(2)} MB)</p>`;
+                    
+                    // Count images
+                    let imageCount = 0;
+                    if (test6Quiz.questions) {
+                        test6Quiz.questions.forEach(q => {
+                            if (q.image) imageCount++;
+                        });
+                    }
+                    html += `<p><strong>Images:</strong> ${imageCount}</p>`;
+                    
+                    if (size > 1048576) {
+                        html += `<p class="warning" style="padding: 10px; border-radius: 6px; margin-top: 10px;">⚠️ <strong>Too Large!</strong> Firebase limit is 1 MB (1,048,576 bytes)</p>`;
+                    } else {
+                        html += `<p class="success" style="padding: 10px; border-radius: 6px; margin-top: 10px;">✅ Within Firebase size limit</p>`;
+                    }
+                    
+                    html += '</div>';
+                    
+                    document.getElementById('quiz-info').innerHTML = html;
+                    document.getElementById('quiz-info').style.display = 'block';
+                    
+                    document.getElementById('compressBtn').disabled = false;
+                    
+                    if (size <= 1048576) {
+                        document.getElementById('saveBtn').disabled = false;
+                        showStatus('✅ TEST 6 found and is ready to save!', 'success');
+                    } else {
+                        showStatus('✅ TEST 6 found but needs compression', 'warning');
+                    }
+                } else {
+                    showStatus('❌ TEST 6 not found in localStorage', 'error');
+                    document.getElementById('quiz-info').innerHTML = '<p>TEST 6 was not found. It may have been deleted or never created.</p>';
+                    document.getElementById('quiz-info').style.display = 'block';
+                }
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        async function compressImage(dataUrl, maxWidth = 1200, maxHeight = 1200, quality = 0.85) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth || height > maxHeight) {
+                        const aspectRatio = width / height;
+                        if (width > height) {
+                            width = maxWidth;
+                            height = width / aspectRatio;
+                        } else {
+                            height = maxHeight;
+                            width = height * aspectRatio;
+                        }
+                    }
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Try to compress to under 200KB per image
+                    let compressed = canvas.toDataURL('image/jpeg', quality);
+                    let currentQuality = quality;
+                    
+                    while ((compressed.length * 0.75) / 1024 > 200 && currentQuality > 0.6) {
+                        currentQuality -= 0.05;
+                        compressed = canvas.toDataURL('image/jpeg', currentQuality);
+                    }
+                    
+                    resolve(compressed);
+                };
+                
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = dataUrl;
+            });
+        }
+
+        window.compressTest6 = async function() {
+            if (!test6Quiz) {
+                showStatus('❌ Please find TEST 6 first', 'error');
+                return;
+            }
+            
+            showStatus('🔄 Compressing images...', 'info');
+            updateProgress(0, 'Starting compression...');
+            
+            try {
+                compressedQuiz = { ...test6Quiz };
+                let imageCount = 0;
+                let totalImages = 0;
+                
+                // Count total images
+                if (compressedQuiz.questions) {
+                    compressedQuiz.questions.forEach(q => {
+                        if (q.image && q.image.startsWith('data:image/')) totalImages++;
+                    });
+                }
+                
+                if (totalImages === 0) {
+                    showStatus('ℹ️ No images to compress', 'info');
+                    compressedQuiz = test6Quiz;
+                    document.getElementById('saveBtn').disabled = false;
+                    hideProgress();
+                    return;
+                }
+                
+                // Compress each image
+                for (let i = 0; i < compressedQuiz.questions.length; i++) {
+                    const question = compressedQuiz.questions[i];
+                    
+                    if (question.image && question.image.startsWith('data:image/')) {
+                        imageCount++;
+                        const percent = Math.round((imageCount / totalImages) * 100);
+                        updateProgress(percent, `Compressing image ${imageCount}/${totalImages}...`);
+                        
+                        try {
+                            const originalSize = (question.image.length * 0.75) / 1024;
+                            const compressed = await compressImage(question.image);
+                            const newSize = (compressed.length * 0.75) / 1024;
+                            
+                            question.image = compressed;
+                            console.log(`Image ${imageCount}: ${originalSize.toFixed(2)}KB → ${newSize.toFixed(2)}KB`);
+                        } catch (error) {
+                            console.warn(`Failed to compress image ${imageCount}:`, error);
+                        }
+                    }
+                }
+                
+                const originalSize = calculateSize(test6Quiz);
+                const newSize = calculateSize(compressedQuiz);
+                
+                hideProgress();
+                
+                let html = '<div class="quiz-info">';
+                html += '<h3>✅ Compression Complete!</h3>';
+                html += `<p><strong>Original Size:</strong> ${getHumanReadableSize(originalSize)}</p>`;
+                html += `<p><strong>Compressed Size:</strong> ${getHumanReadableSize(newSize)}</p>`;
+                html += `<p><strong>Reduction:</strong> ${getHumanReadableSize(originalSize - newSize)} (${Math.round(((originalSize - newSize) / originalSize) * 100)}%)</p>`;
+                html += `<p><strong>Images Compressed:</strong> ${imageCount}</p>`;
+                
+                if (newSize > 1048576) {
+                    html += `<p class="error" style="padding: 10px; border-radius: 6px; margin-top: 10px;">❌ Still too large! Size: ${(newSize / 1048576).toFixed(2)} MB (limit: 1 MB)</p>`;
+                    html += `<p>Please reduce the number of images or use lower quality images.</p>`;
+                } else {
+                    html += `<p class="success" style="padding: 10px; border-radius: 6px; margin-top: 10px;">✅ Now within Firebase size limit!</p>`;
+                    document.getElementById('saveBtn').disabled = false;
+                }
+                
+                html += '</div>';
+                document.getElementById('results').innerHTML = html;
+                
+                if (newSize <= 1048576) {
+                    showStatus('✅ Images compressed successfully! Ready to save.', 'success');
+                } else {
+                    showStatus('⚠️ Quiz is still too large after compression', 'warning');
+                }
+            } catch (error) {
+                hideProgress();
+                showStatus('❌ Compression failed: ' + error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        window.saveToFirebase = async function() {
+            const quizToSave = compressedQuiz || test6Quiz;
+            
+            if (!quizToSave) {
+                showStatus('❌ Please find TEST 6 first', 'error');
+                return;
+            }
+            
+            const size = calculateSize(quizToSave);
+            if (size > 1048576) {
+                showStatus('❌ Quiz is too large to save. Please compress it first.', 'error');
+                return;
+            }
+            
+            showStatus('💾 Saving to Firebase...', 'info');
+            updateProgress(50, 'Uploading to Firebase...');
+            
+            try {
+                const quizDoc = doc(db, 'quizzes', quizToSave.id);
+                
+                const dataToSave = {
+                    ...quizToSave,
+                    publishedAt: Timestamp.now(),
+                    isPublished: true,
+                    published: true
+                };
+                
+                await setDoc(quizDoc, dataToSave);
+                
+                updateProgress(100, 'Saved successfully!');
+                
+                setTimeout(() => {
+                    hideProgress();
+                    showStatus('✅ TEST 6 saved to Firebase successfully!', 'success');
+                    
+                    let html = '<div class="success" style="padding: 20px; margin: 20px 0;">';
+                    html += '<h3>🎉 Success!</h3>';
+                    html += '<p><strong>TEST 6 has been saved to Firebase!</strong></p>';
+                    html += '<p>You can now:</p>';
+                    html += '<ul>';
+                    html += '<li>Go to <a href="https://lohits.netlify.app" target="_blank">Quiz Master</a></li>';
+                    html += '<li>Refresh the page</li>';
+                    html += '<li>TEST 6 should be visible</li>';
+                    html += '<li>It will sync across all devices</li>';
+                    html += '</ul>';
+                    html += '<button onclick="window.open(\'https://lohits.netlify.app\', \'_blank\')" style="margin-top: 15px;">Open Quiz Master</button>';
+                    html += '</div>';
+                    
+                    document.getElementById('results').innerHTML = html;
+                }, 1000);
+            } catch (error) {
+                hideProgress();
+                showStatus('❌ Failed to save: ' + error.message, 'error');
+                console.error('Save error:', error);
+                
+                document.getElementById('results').innerHTML = 
+                    `<div class="error" style="padding: 15px; margin: 15px 0;">
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p>Please make sure Firebase rules allow writes.</p>
+                    </div>`;
+            }
+        };
+
+        // Auto-run on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                findTest6();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

@@ -7,8 +7,10 @@ interface QuizBuilderProps {
   quizTitle: string;
   numberOfQuestions: number;
   categoryId: string;
+  subject?: string; // New: Optional subject
+  chapters?: string; // New: Optional chapters (comma-separated)
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (savedQuiz: SavedQuiz) => void;  // ← Pass quiz to parent!
 }
 
 interface QuestionFormData {
@@ -20,18 +22,21 @@ interface QuestionFormData {
     d: string;
   };
   correctAnswer: 'a' | 'b' | 'c' | 'd';
-  imageUrl?: string;
+  imageUrls: string[];
 }
 
-const QuizBuilder: React.FC<QuizBuilderProps> = ({ 
-  quizTitle, 
-  numberOfQuestions, 
-  categoryId, 
-  onBack, 
-  onSuccess 
+const QuizBuilder: React.FC<QuizBuilderProps> = ({
+  quizTitle,
+  numberOfQuestions,
+  categoryId,
+  subject, // New: Accept subject prop
+  chapters, // New: Accept chapters prop
+  onBack,
+  onSuccess
 }) => {
   const [questions, setQuestions] = useState<QuestionFormData[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [defaultTimerMinutes, setDefaultTimerMinutes] = useState(10); // Default 10 minutes
   const [alert, setAlert] = useState<{ type: 'success' | 'danger', message: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isPasteModeEnabled, setIsPasteModeEnabled] = useState(false);
@@ -46,7 +51,8 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
       initialQuestions.push({
         question: '',
         options: { a: 'A', b: 'B', c: 'C', d: 'D' },
-        correctAnswer: 'a'
+        correctAnswer: 'a',
+        imageUrls: []
       });
     }
     setQuestions(initialQuestions);
@@ -68,30 +74,112 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
     }));
   };
 
+  const MAX_IMAGES = 5;
+
+  const addImageUrl = (url: string) => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i === currentQuestionIndex) {
+        if (q.imageUrls.length >= MAX_IMAGES) return q;
+        return { ...q, imageUrls: [...q.imageUrls, url] };
+      }
+      return q;
+    }));
+  };
+
+  const replaceLastImageUrl = (url: string) => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i === currentQuestionIndex) {
+        const updated = [...q.imageUrls];
+        updated[updated.length - 1] = url;
+        return { ...q, imageUrls: updated };
+      }
+      return q;
+    }));
+  };
+
+  const removeImageUrl = (imgIndex: number) => {
+    setQuestions(prev => prev.map((q, i) => {
+      if (i === currentQuestionIndex) {
+        return { ...q, imageUrls: q.imageUrls.filter((_, idx) => idx !== imgIndex) };
+      }
+      return q;
+    }));
+  };
+
   const handleImageUpload = async (file: File) => {
-    setIsUploading(true);
+    if (questions[currentQuestionIndex].imageUrls.length >= MAX_IMAGES) {
+      showErrorMessage('Maximum 5 images allowed per question.');
+      return;
+    }
     try {
-      const imageUrl = await ImageUtils.handleFileUpload(file);
-      updateQuestion('imageUrl', imageUrl);
-      showSuccessMessage('Image uploaded successfully!');
+      // INSTANT: Create and show preview immediately (< 100ms)
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          addImageUrl(e.target.result as string);
+          showSuccessMessage('✅ Image loaded! Uploading in background...');
+        }
+      };
+      reader.readAsDataURL(file);
+
+      // BACKGROUND: Upload to Cloudinary without blocking
+      setIsUploading(true);
+      ImageUtils.handleFileUpload(file).then((cloudinaryUrl) => {
+        replaceLastImageUrl(cloudinaryUrl);
+        showSuccessMessage('✅ Image uploaded to cloud!');
+        setIsUploading(false);
+      }).catch((error) => {
+        console.warn('Upload to Cloudinary failed, keeping local preview');
+        setIsUploading(false);
+      });
+
     } catch (error) {
       showErrorMessage(error instanceof Error ? error.message : 'Failed to upload image');
-    } finally {
       setIsUploading(false);
     }
   };
 
   const handleImagePaste = async (event: React.ClipboardEvent) => {
     event.preventDefault();
+
+    if (!isPasteModeEnabled) {
+      showErrorMessage('Please click "Paste Mode ON" button first!');
+      return;
+    }
+
+    if (questions[currentQuestionIndex].imageUrls.length >= MAX_IMAGES) {
+      showErrorMessage('Maximum 5 images allowed per question.');
+      return;
+    }
+
     setIsUploading(true);
     try {
-      const imageUrl = await ImageUtils.handleClipboardPaste(event.nativeEvent as ClipboardEvent);
-      updateQuestion('imageUrl', imageUrl);
-      showSuccessMessage('Image pasted successfully!');
-      setIsPasteModeEnabled(false); // Disable paste mode after successful paste
+      console.log('📋 Processing pasted image...');
+      const { previewUrl, uploadPromise } = await ImageUtils.handleClipboardPaste(event.nativeEvent as ClipboardEvent);
+
+      // ⚡ INSTANT: show high-quality preview immediately
+      addImageUrl(previewUrl);
+
+      const newCount = questions[currentQuestionIndex].imageUrls.length + 1;
+      if (newCount >= MAX_IMAGES) {
+        showSuccessMessage(`✅ Image pasted! Uploading to cloud... (${MAX_IMAGES - newCount + 1} images, max reached)`);
+        setIsPasteModeEnabled(false);
+      } else {
+        showSuccessMessage(`✅ Image pasted! You can paste ${MAX_IMAGES - newCount} more.`);
+      }
+      setIsUploading(false);
+
+      // ☁️ BACKGROUND: swap preview with final Cloudinary URL silently
+      uploadPromise.then((cloudUrl) => {
+        if (cloudUrl !== previewUrl) {
+          replaceLastImageUrl(cloudUrl);
+          console.log('✅ Preview swapped with Cloudinary URL');
+        }
+      });
+
     } catch (error) {
-      showErrorMessage(error instanceof Error ? error.message : 'Failed to paste image');
-    } finally {
+      console.error('❌ Paste error:', error);
+      showErrorMessage(error instanceof Error ? error.message : 'Failed to paste image. Try uploading instead.');
       setIsUploading(false);
     }
   };
@@ -121,22 +209,32 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
       },
       correctAnswer: questionData.correctAnswer,
       category: categoryId,
-      imageUrl: questionData.imageUrl
+      imageUrl: questionData.imageUrls[0],
+      imageUrls: questionData.imageUrls.length > 0 ? questionData.imageUrls : undefined
     }));
 
     // Create saved quiz
+    const chaptersArray = chapters
+      ? chapters.split(',').map(ch => ch.trim()).filter(ch => ch.length > 0)
+      : undefined;
+
     const savedQuiz: SavedQuiz = {
       id: QuizUtils.generateId(),
       title: quizTitle || 'Untitled Quiz',
       questions: quizQuestions,
       createdAt: Date.now(),
-      description: `Custom quiz with ${quizQuestions.length} questions`
+      description: `Custom quiz with ${quizQuestions.length} questions`,
+      defaultTimerMinutes: defaultTimerMinutes,
+      subject: subject || undefined, // Add subject if provided
+      chapters: chaptersArray // Add chapters array if provided
     };
 
     try {
       StorageUtils.addSavedQuiz(savedQuiz);
-      onSuccess();
+      console.log('✅ Quiz saved to localStorage, now passing to Firebase...', savedQuiz.title);
+      onSuccess(savedQuiz);  // ← PASS THE QUIZ OBJECT!
     } catch (error) {
+      console.error('❌ Error saving quiz:', error);
       showErrorMessage('Failed to save quiz. Please try again.');
     }
   };
@@ -180,8 +278,8 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
       <Row className="mb-4">
         <Col>
           <div className="progress" style={{ height: '8px' }}>
-            <div 
-              className="progress-bar bg-primary" 
+            <div
+              className="progress-bar bg-primary"
               style={{ width: `${progress}%` }}
             ></div>
           </div>
@@ -297,29 +395,47 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
                 <div className="border rounded p-3 bg-light">
                   <h6 className="fw-bold mb-3">
                     <i className="fas fa-image me-2"></i>
-                    Image (Optional)
+                    Images (Optional — max 5)
+                    <span className="ms-2 badge bg-secondary">
+                      {currentQuestion.imageUrls.length} / 5
+                    </span>
                   </h6>
-                  
-                  {currentQuestion.imageUrl ? (
-                    <div className="text-center">
-                      <img
-                        src={currentQuestion.imageUrl}
-                        alt="Question"
-                        className="img-fluid rounded mb-3"
-                        style={{ maxHeight: '200px' }}
-                      />
-                      <div>
-                        <Button
-                          variant="outline-danger"
-                          size="sm"
-                          onClick={() => updateQuestion('imageUrl', undefined)}
-                        >
-                          <i className="fas fa-trash me-2"></i>
-                          Remove Image
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
+
+                  {/* Existing images */}
+                  {currentQuestion.imageUrls.length > 0 && (
+                    <Row className="g-2 mb-3">
+                      {currentQuestion.imageUrls.map((url, imgIdx) => (
+                        <Col key={imgIdx} xs={12} sm={4}>
+                          <div className="position-relative border rounded overflow-hidden" style={{ height: '150px' }}>
+                            <img
+                              src={url}
+                              alt={`Question image ${imgIdx + 1}`}
+                              className="w-100 h-100"
+                              style={{ objectFit: 'contain', backgroundColor: '#f8f9fa' }}
+                            />
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              className="position-absolute top-0 end-0 m-1 px-2 py-0"
+                              style={{ fontSize: '0.75rem' }}
+                              onClick={() => removeImageUrl(imgIdx)}
+                            >
+                              <i className="fas fa-times"></i>
+                            </Button>
+                            <span
+                              className="position-absolute bottom-0 start-0 m-1 badge bg-dark"
+                              style={{ fontSize: '0.65rem' }}
+                            >
+                              {imgIdx + 1}
+                            </span>
+                          </div>
+                        </Col>
+                      ))}
+                    </Row>
+                  )}
+
+                  {/* Upload / Paste controls — only when < 3 images */}
+                  {currentQuestion.imageUrls.length < MAX_IMAGES ? (
                     <div>
                       <div className="d-flex gap-2 mb-3">
                         <Button
@@ -331,12 +447,12 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
                           Upload Image
                         </Button>
                         <Button
-                          variant={isPasteModeEnabled ? "primary" : "outline-secondary"}
+                          variant={isPasteModeEnabled ? 'primary' : 'outline-secondary'}
                           onClick={() => setIsPasteModeEnabled(!isPasteModeEnabled)}
                           disabled={isUploading}
                         >
                           <i className="fas fa-paste me-2"></i>
-                          {isPasteModeEnabled ? "Paste Mode ON" : "Enable Paste"}
+                          {isPasteModeEnabled ? 'Paste Mode ON' : 'Enable Paste'}
                         </Button>
                       </div>
 
@@ -356,9 +472,11 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
                             <div>
                               <i className="fas fa-clipboard fa-2x text-success mb-2"></i>
                               <p className="text-muted mb-0">
-                                Press <kbd>Ctrl+V</kbd> to paste your image here
+                                Press <kbd>Ctrl+V</kbd> to paste an image here
                               </p>
-                              <small className="text-success">Paste mode is active</small>
+                              <small className="text-success">
+                                Paste mode active — {MAX_IMAGES - currentQuestion.imageUrls.length} slot{MAX_IMAGES - currentQuestion.imageUrls.length !== 1 ? 's' : ''} remaining
+                              </small>
                             </div>
                           )}
                         </div>
@@ -380,15 +498,56 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
                         style={{ display: 'none' }}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) handleImageUpload(file);
+                          if (file) {
+                            handleImageUpload(file);
+                            e.target.value = '';
+                          }
                         }}
                       />
 
                       <small className="text-muted">
-                        Supported formats: PNG, JPG, JPEG, GIF, BMP, WebP (Max: 16MB)
+                        Supported formats: PNG, JPG, JPEG, GIF, BMP, WebP (Max: 16MB each, up to 5 images)
                       </small>
                     </div>
+                  ) : (
+                    <div className="text-center text-muted py-2">
+                      <i className="fas fa-check-circle text-success me-2"></i>
+                      Maximum 5 images added. Remove one to add another.
+                    </div>
                   )}
+                </div>
+              </Col>
+            </Row>
+          </Card.Body>
+        </Card>
+      )}
+
+      {/* Default Timer Setting - Only show on last question */}
+      {currentQuestionIndex === questions.length - 1 && (
+        <Card className="mt-3">
+          <Card.Body>
+            <h6 className="mb-3">
+              <i className="fas fa-clock me-2"></i>
+              Quiz Timer Settings
+            </h6>
+            <Row>
+              <Col md={6}>
+                <div className="mb-3">
+                  <label className="form-label">
+                    Default Time Limit (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={defaultTimerMinutes}
+                    onChange={(e) => setDefaultTimerMinutes(Math.max(1, parseInt(e.target.value) || 10))}
+                    min="1"
+                    max="180"
+                    placeholder="10"
+                  />
+                  <small className="text-muted">
+                    This will be the default time limit when taking this quiz
+                  </small>
                 </div>
               </Col>
             </Row>
@@ -442,8 +601,8 @@ const QuizBuilder: React.FC<QuizBuilderProps> = ({
                 {questions.map((q, index) => (
                   <Button
                     key={index}
-                    variant={index === currentQuestionIndex ? 'primary' : 
-                             q.question.trim() ? 'success' : 'outline-secondary'}
+                    variant={index === currentQuestionIndex ? 'primary' :
+                      q.question.trim() ? 'success' : 'outline-secondary'}
                     size="sm"
                     onClick={() => setCurrentQuestionIndex(index)}
                     className="rounded-circle"

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Results Diagnostic Tool</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; background: #f9f9f9; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        pre { background: #333; color: #fff; padding: 16px; border-radius: 8px; overflow-x: auto; }
+        button { padding: 12px 24px; margin: 8px; cursor: pointer; border: none; border-radius: 4px; font-size: 14px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #007bff; color: white; }
+        tr:hover { background: #f5f5f5; }
+        .highlight { background-color: #fff3cd; }
+        h1 { color: #333; }
+        h2 { color: #555; border-bottom: 2px solid #007bff; padding-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Quiz Results Diagnostic Tool</h1>
+    <p>This tool diagnoses why student results from "test 12" or other quizzes may not be showing up.</p>
+
+    <div class="card">
+        <h2>Step 1: Check Firebase Connection</h2>
+        <button onclick="checkFirebaseConnection()" class="btn-primary">🔥 Check Firebase Connection</button>
+        <div id="firebase-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Step 2: Fetch ALL Results from Firebase</h2>
+        <button onclick="fetchAllResults()" class="btn-primary">📊 Fetch All Results from Firebase</button>
+        <button onclick="searchForQuiz('test 12')" class="btn-success">🔎 Search for "test 12" Results</button>
+        <button onclick="searchForQuiz('test')" class="btn-success">🔎 Search for ANY "test" Results</button>
+        <div id="results-status"></div>
+        <div id="results-table"></div>
+    </div>
+
+    <div class="card">
+        <h2>Step 3: Check Local Storage</h2>
+        <button onclick="checkLocalStorage()" class="btn-primary">💾 Check Local Storage Results</button>
+        <div id="local-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Step 4: Compare Firebase vs Local</h2>
+        <button onclick="compareData()" class="btn-primary">⚖️ Compare Firebase & Local Data</button>
+        <div id="compare-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Step 5: Raw Firebase Data Debug</h2>
+        <button onclick="showRawData()" class="btn-primary">🔧 Show Raw Firebase Data</button>
+        <div id="raw-data"></div>
+    </div>
+
+    <script>
+        // Firebase configuration (same as your app)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRp2rlr4WoPvq-Ut6Vs4cJAoU56qM5Y40",
+            authDomain: "quiz-web-app-109af.firebaseapp.com",
+            projectId: "quiz-web-app-109af",
+            storageBucket: "quiz-web-app-109af.firebasestorage.app",
+            messagingSenderId: "482157581997",
+            appId: "1:482157581997:web:03ae71b62000dfa0ccd824"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let allFirebaseResults = [];
+        let allLocalResults = [];
+
+        async function checkFirebaseConnection() {
+            const statusDiv = document.getElementById('firebase-status');
+            statusDiv.innerHTML = '<p class="info">⏳ Checking Firebase connection...</p>';
+            
+            try {
+                // Try to fetch a single document to verify connection
+                const testRef = db.collection('attempts');
+                const snapshot = await testRef.limit(1).get();
+                
+                statusDiv.innerHTML = `
+                    <p class="success">✅ Firebase connected successfully!</p>
+                    <p>Project: ${firebaseConfig.projectId}</p>
+                    <p>Collection 'attempts' exists: ${!snapshot.empty ? 'Yes' : 'Empty or not created yet'}</p>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <p class="error">❌ Firebase connection failed!</p>
+                    <p>Error: ${error.message}</p>
+                    <pre>${JSON.stringify(error, null, 2)}</pre>
+                `;
+            }
+        }
+
+        async function fetchAllResults() {
+            const statusDiv = document.getElementById('results-status');
+            const tableDiv = document.getElementById('results-table');
+            
+            statusDiv.innerHTML = '<p class="info">⏳ Fetching all results from Firebase...</p>';
+            
+            try {
+                const snapshot = await db.collection('attempts').get();
+                
+                allFirebaseResults = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    allFirebaseResults.push({
+                        docId: doc.id,
+                        ...data
+                    });
+                });
+
+                statusDiv.innerHTML = `
+                    <p class="success">✅ Found ${allFirebaseResults.length} results in Firebase!</p>
+                `;
+
+                if (allFirebaseResults.length === 0) {
+                    tableDiv.innerHTML = '<p class="warning">⚠️ No results found in Firebase "attempts" collection.</p>';
+                    tableDiv.innerHTML += `
+                        <h3>Possible Issues:</h3>
+                        <ul>
+                            <li>Students may not have submitted their quizzes properly</li>
+                            <li>There might be a network issue when students submit</li>
+                            <li>Results might be saved to a different collection</li>
+                            <li>Firebase security rules might be blocking writes</li>
+                        </ul>
+                    `;
+                    return;
+                }
+
+                // Display results table
+                let tableHTML = `
+                    <h3>All Results (${allFirebaseResults.length}):</h3>
+                    <table>
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th>Quiz Title</th>
+                            <th>Score</th>
+                            <th>Percentage</th>
+                            <th>Session ID</th>
+                            <th>Completed At</th>
+                        </tr>
+                `;
+
+                allFirebaseResults.forEach((result, index) => {
+                    const completedAt = result.completedAt ? new Date(result.completedAt).toLocaleString() : 'Unknown';
+                    const isTest12 = (result.quizTitle || '').toLowerCase().includes('test 12') ||
+                                     (result.quizTitle || '').toLowerCase().includes('test12');
+                    
+                    tableHTML += `
+                        <tr class="${isTest12 ? 'highlight' : ''}">
+                            <td>${index + 1}</td>
+                            <td>${result.studentName || 'Anonymous'}</td>
+                            <td>${result.quizTitle || 'Unknown'}</td>
+                            <td>${result.totalMarks || result.score || 0}/${result.maxMarks || result.totalQuestions * 4 || 0}</td>
+                            <td>${result.percentage || 0}%</td>
+                            <td style="font-size: 10px">${result.sessionId || result.docId}</td>
+                            <td>${completedAt}</td>
+                        </tr>
+                    `;
+                });
+
+                tableHTML += '</table>';
+                tableDiv.innerHTML = tableHTML;
+
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <p class="error">❌ Error fetching results!</p>
+                    <p>Error: ${error.message}</p>
+                `;
+                console.error('Fetch error:', error);
+            }
+        }
+
+        function searchForQuiz(searchTerm) {
+            const statusDiv = document.getElementById('results-status');
+            const tableDiv = document.getElementById('results-table');
+
+            if (allFirebaseResults.length === 0) {
+                statusDiv.innerHTML = '<p class="warning">⚠️ Please fetch all results first!</p>';
+                return;
+            }
+
+            const searchLower = searchTerm.toLowerCase();
+            const matches = allFirebaseResults.filter(r => {
+                const quizTitle = (r.quizTitle || '').toLowerCase();
+                return quizTitle.includes(searchLower);
+            });
+
+            statusDiv.innerHTML = `
+                <p class="${matches.length > 0 ? 'success' : 'warning'}">
+                    ${matches.length > 0 ? '✅' : '⚠️'} Found ${matches.length} results containing "${searchTerm}"
+                </p>
+            `;
+
+            if (matches.length === 0) {
+                // Show all unique quiz titles to help identify the issue
+                const uniqueTitles = [...new Set(allFirebaseResults.map(r => r.quizTitle || 'Unknown'))];
+                tableDiv.innerHTML = `
+                    <h3>No matches for "${searchTerm}"</h3>
+                    <p>Here are all the quiz titles found in Firebase:</p>
+                    <ul>
+                        ${uniqueTitles.map(title => `<li><strong>${title}</strong></li>`).join('')}
+                    </ul>
+                    <p class="warning">⚠️ Check if "test 12" might be saved with a different name!</p>
+                `;
+                return;
+            }
+
+            // Display matching results
+            let tableHTML = `
+                <h3>Results for "${searchTerm}" (${matches.length}):</h3>
+                <table>
+                    <tr>
+                        <th>#</th>
+                        <th>Student Name</th>
+                        <th>Student Email</th>
+                        <th>Quiz Title</th>
+                        <th>Score</th>
+                        <th>Percentage</th>
+                        <th>Completed At</th>
+                    </tr>
+            `;
+
+            matches.forEach((result, index) => {
+                const completedAt = result.completedAt ? new Date(result.completedAt).toLocaleString() : 'Unknown';
+                tableHTML += `
+                    <tr class="highlight">
+                        <td>${index + 1}</td>
+                        <td>${result.studentName || 'Anonymous'}</td>
+                        <td>${result.studentEmail || 'N/A'}</td>
+                        <td>${result.quizTitle || 'Unknown'}</td>
+                        <td>${result.totalMarks || result.score || 0}/${result.maxMarks || 0}</td>
+                        <td>${result.percentage || 0}%</td>
+                        <td>${completedAt}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += '</table>';
+            tableDiv.innerHTML = tableHTML;
+        }
+
+        function checkLocalStorage() {
+            const statusDiv = document.getElementById('local-status');
+            
+            try {
+                const localResults = localStorage.getItem('quiz_master_student_results');
+                allLocalResults = localResults ? JSON.parse(localResults) : [];
+                
+                statusDiv.innerHTML = `
+                    <p class="success">✅ Found ${allLocalResults.length} results in localStorage!</p>
+                `;
+
+                if (allLocalResults.length > 0) {
+                    const uniqueTitles = [...new Set(allLocalResults.map(r => r.quizTitle || 'Unknown'))];
+                    statusDiv.innerHTML += `
+                        <h4>Local quiz titles:</h4>
+                        <ul>
+                            ${uniqueTitles.map(title => `<li>${title}</li>`).join('')}
+                        </ul>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <p class="error">❌ Error reading localStorage!</p>
+                    <p>Error: ${error.message}</p>
+                `;
+            }
+        }
+
+        async function compareData() {
+            const statusDiv = document.getElementById('compare-status');
+            
+            if (allFirebaseResults.length === 0) {
+                await fetchAllResults();
+            }
+            
+            checkLocalStorage();
+
+            // Find differences
+            const firebaseSessionIds = new Set(allFirebaseResults.map(r => r.sessionId || r.docId));
+            const localSessionIds = new Set(allLocalResults.map(r => r.sessionId));
+
+            const inFirebaseOnly = allFirebaseResults.filter(r => !localSessionIds.has(r.sessionId || r.docId));
+            const inLocalOnly = allLocalResults.filter(r => !firebaseSessionIds.has(r.sessionId));
+
+            statusDiv.innerHTML = `
+                <h3>Comparison Results:</h3>
+                <p><strong>Firebase:</strong> ${allFirebaseResults.length} results</p>
+                <p><strong>Local Storage:</strong> ${allLocalResults.length} results</p>
+                <p class="${inFirebaseOnly.length > 0 ? 'warning' : 'success'}">
+                    <strong>In Firebase but NOT in Local:</strong> ${inFirebaseOnly.length}
+                </p>
+                <p class="${inLocalOnly.length > 0 ? 'warning' : 'success'}">
+                    <strong>In Local but NOT in Firebase:</strong> ${inLocalOnly.length}
+                </p>
+            `;
+
+            if (inFirebaseOnly.length > 0) {
+                statusDiv.innerHTML += `
+                    <h4>Results in Firebase missing from Local (these should sync!):</h4>
+                    <ul>
+                        ${inFirebaseOnly.map(r => `<li>${r.studentName} - ${r.quizTitle} (${new Date(r.completedAt || 0).toLocaleString()})</li>`).join('')}
+                    </ul>
+                `;
+            }
+
+            if (inLocalOnly.length > 0) {
+                statusDiv.innerHTML += `
+                    <h4>Results in Local missing from Firebase (these weren't saved to cloud!):</h4>
+                    <ul>
+                        ${inLocalOnly.map(r => `<li>${r.studentName} - ${r.quizTitle} (${new Date(r.completedAt || 0).toLocaleString()})</li>`).join('')}
+                    </ul>
+                `;
+            }
+        }
+
+        async function showRawData() {
+            const rawDiv = document.getElementById('raw-data');
+            
+            try {
+                const snapshot = await db.collection('attempts').get();
+                const rawResults = [];
+                
+                snapshot.forEach(doc => {
+                    rawResults.push({
+                        documentId: doc.id,
+                        data: doc.data()
+                    });
+                });
+
+                rawDiv.innerHTML = `
+                    <h3>Raw Firebase Data (${rawResults.length} documents):</h3>
+                    <pre>${JSON.stringify(rawResults, null, 2)}</pre>
+                `;
+            } catch (error) {
+                rawDiv.innerHTML = `
+                    <p class="error">❌ Error: ${error.message}</p>
+                `;
+            }
+        }
+
+        // Auto-check Firebase connection on load
+        window.onload = function() {
+            checkFirebaseConnection();
+        };
+    </script>
+</body>
+</html>

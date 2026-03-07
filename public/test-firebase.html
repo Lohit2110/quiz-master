@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Firebase Test - Student Results</title>
+  <script type="module">
+    // Import Firebase from CDN
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, doc, setDoc, getDocs, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBRp2rlr4WoPvq-Ut6Vs4cJAoU56qM5Y40",
+      authDomain: "quiz-web-app-109af.firebaseapp.com",
+      projectId: "quiz-web-app-109af",
+      storageBucket: "quiz-web-app-109af.firebasestorage.app",
+      messagingSenderId: "482157581997",
+      appId: "1:482157581997:web:03ae71b62000dfa0ccd824"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.testRead = async function() {
+      const log = document.getElementById('log');
+      log.innerHTML += '<p>Reading from attempts collection...</p>';
+      
+      try {
+        const attemptsRef = collection(db, 'attempts');
+        const snapshot = await getDocs(attemptsRef);
+        log.innerHTML += `<p>✅ Found ${snapshot.size} documents</p>`;
+        
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          log.innerHTML += `<p>📄 ${doc.id}: ${data.studentName || 'N/A'} - ${data.quizTitle || 'N/A'}</p>`;
+        });
+      } catch (error) {
+        log.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+        console.error(error);
+      }
+    };
+
+    window.testWrite = async function() {
+      const log = document.getElementById('log');
+      const sessionId = 'test_' + Date.now();
+      log.innerHTML += `<p>Writing test document: ${sessionId}...</p>`;
+      
+      try {
+        const docRef = doc(db, 'attempts', sessionId);
+        await setDoc(docRef, {
+          sessionId: sessionId,
+          studentName: 'Test Student ' + new Date().toLocaleTimeString(),
+          quizTitle: 'Test Quiz',
+          categoryName: 'Test Category',
+          totalQuestions: 5,
+          correctAnswers: 3,
+          incorrectAnswers: 1,
+          skippedQuestions: 1,
+          score: 3,
+          percentage: 60,
+          totalMarks: 11,
+          maxMarks: 20,
+          timeTaken: 120000,
+          completedAt: Date.now(),
+          submittedAt: Timestamp.now(),
+          detailedResults: []
+        });
+        log.innerHTML += `<p>✅ SUCCESS! Document written: ${sessionId}</p>`;
+        log.innerHTML += `<p>🔍 Check Firebase Console → Firestore → attempts → ${sessionId}</p>`;
+      } catch (error) {
+        log.innerHTML += `<p>❌ Error: ${error.code} - ${error.message}</p>`;
+        console.error(error);
+      }
+    };
+  </script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { padding: 10px 20px; margin: 10px; cursor: pointer; }
+    #log { background: #f0f0f0; padding: 15px; margin-top: 20px; min-height: 200px; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Firebase Student Results Test</h1>
+  <p>This page tests direct Firebase connectivity for the attempts collection.</p>
+  
+  <button onclick="testRead()">Test READ (Get All Results)</button>
+  <button onclick="testWrite()">Test WRITE (Add Test Result)</button>
+  
+  <div id="log">
+    <p>Click a button to test Firebase...</p>
+  </div>
+</body>
+</html>

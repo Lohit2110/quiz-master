@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Site Data Recovery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .box {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #dc3545; }
+        .instructions {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        button {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0b5ed7; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Last Resort Data Recovery</h1>
+    
+    <div class="box">
+        <h2>Current Situation</h2>
+        <p>❌ IndexedDB backup database exists but has no data stores</p>
+        <p>❌ Quiz chunks were deleted from Firebase</p>
+        <p>⚠️ Data appears to be lost</p>
+    </div>
+
+    <div class="box">
+        <h2>🚨 Recovery Options</h2>
+        
+        <div class="instructions">
+            <h3>Option 1: Check Browser Console History</h3>
+            <ol>
+                <li>Go to <a href="https://lohits.netlify.app" target="_blank">https://lohits.netlify.app</a></li>
+                <li>Open DevTools (F12) → Console tab</li>
+                <li>Look through the console history for any quiz data that was logged</li>
+                <li>Look for lines like: <code>Questions to save: 30</code> or <code>New question object</code></li>
+                <li>If you find any quiz data objects, copy them</li>
+            </ol>
+        </div>
+
+        <div class="instructions">
+            <h3>Option 2: Browser Cache</h3>
+            <ol>
+                <li>Open DevTools (F12) → Application tab</li>
+                <li>Check "Local Storage" → https://lohits.netlify.app</li>
+                <li>Look for any keys containing "quiz"</li>
+                <li>Copy the values and paste below</li>
+            </ol>
+            <textarea id="paste-area" placeholder="Paste any quiz data here..." style="width: 100%; height: 150px; font-family: monospace;"></textarea>
+            <button onclick="parseData()">Parse Data</button>
+            <pre id="parse-result"></pre>
+        </div>
+
+        <div class="instructions">
+            <h3>Option 3: Manual Recreation</h3>
+            <p>If no data can be recovered, you'll need to recreate the quiz. I've fixed the bug so this won't happen again.</p>
+            <p><strong>The bug that caused this:</strong></p>
+            <ul>
+                <li>❌ Old code: Delete old chunks FIRST → Save new chunks SECOND</li>
+                <li>✅ Fixed code: Save new chunks FIRST → Delete old chunks SECOND</li>
+                <li>If Firebase permission/auth failed during save, old data was already gone</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="box">
+        <h2>🛠️ Next Steps</h2>
+        <ol>
+            <li><strong>Deploy Fixed Version</strong> - Prevents this from happening again</li>
+            <li><strong>Create New Quiz</strong> - Start fresh with the fixed version</li>
+            <li><strong>Enable Auto-Backup</strong> - Set up automatic exports</li>
+        </ol>
+        <button onclick="location.href='https://lohits.netlify.app/admin'" style="background: #198754;">
+            Go to Admin Panel
+        </button>
+    </div>
+
+    <script>
+        function parseData() {
+            const textarea = document.getElementById('paste-area');
+            const result = document.getElementById('parse-result');
+            const data = textarea.value;
+            
+            try {
+                const parsed = JSON.parse(data);
+                result.textContent = '✅ Valid JSON!\n\n' + JSON.stringify(parsed, null, 2);
+                
+                if (parsed.questions && Array.isArray(parsed.questions)) {
+                    result.textContent = `✅ Found ${parsed.questions.length} questions!\n\nTitle: ${parsed.title}\n\n` + JSON.stringify(parsed, null, 2).substring(0, 1000);
+                    
+                    // Offer download
+                    const blob = new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'recovered_quiz.json';
+                    a.textContent = '⬇️ Download This Data';
+                    a.style.display = 'block';
+                    a.style.marginTop = '10px';
+                    result.appendChild(document.createElement('br'));
+                    result.appendChild(a);
+                }
+            } catch (error) {
+                result.textContent = '❌ Invalid JSON: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

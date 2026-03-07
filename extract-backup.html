@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Extract Quiz Backup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #198754; }
+        button {
+            background: #198754;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover { background: #146c43; }
+        .success { color: #198754; font-weight: bold; }
+        .error { color: #dc3545; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 500px;
+            font-size: 12px;
+        }
+        .quiz-item {
+            background: #e7f5ff;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #0d6efd;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔓 Extract Quiz Backup from IndexedDB</h1>
+    
+    <div class="section">
+        <h2>Step 1: Extract All Backups</h2>
+        <button onclick="extractAllBackups()" style="font-size: 18px; padding: 15px 30px;">
+            🔍 Extract All Quiz Backups
+        </button>
+        <div id="results"></div>
+    </div>
+
+    <div class="section" id="quizzes-section" style="display:none;">
+        <h2>Step 2: Select Quiz to Restore</h2>
+        <div id="quiz-list"></div>
+    </div>
+
+    <div class="section" id="preview-section" style="display:none;">
+        <h2>Step 3: Preview & Download</h2>
+        <div id="preview"></div>
+        <button onclick="downloadSelected()" style="background: #0d6efd;">
+            ⬇️ Download Selected Quiz
+        </button>
+        <button onclick="uploadToFirebase()" style="background: #fd7e14;">
+            ☁️ Upload to Firebase
+        </button>
+    </div>
+
+    <script>
+        let allQuizzes = [];
+        let selectedQuiz = null;
+
+        async function extractAllBackups() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>🔄 Opening IndexedDB...</p>';
+
+            try {
+                // Open the quiz-backup database
+                const dbRequest = indexedDB.open('quiz-backup', 1);
+
+                dbRequest.onerror = () => {
+                    results.innerHTML = '<p class="error">❌ Error opening database</p>';
+                };
+
+                dbRequest.onsuccess = (event) => {
+                    const db = event.target.result;
+                    results.innerHTML = '<p class="success">✅ Database opened successfully!</p>';
+                    
+                    // List all object stores
+                    const storeNames = Array.from(db.objectStoreNames);
+                    results.innerHTML += `<p>📦 Found ${storeNames.length} stores: ${storeNames.join(', ')}</p>`;
+
+                    if (storeNames.length === 0) {
+                        results.innerHTML += '<p class="error">❌ No stores found in database</p>';
+                        return;
+                    }
+
+                    // Try to read from each store
+                    storeNames.forEach(storeName => {
+                        readStore(db, storeName);
+                    });
+                };
+
+                dbRequest.onupgradeneeded = (event) => {
+                    results.innerHTML += '<p class="error">⚠️ Database needs upgrade</p>';
+                };
+
+            } catch (error) {
+                results.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+                console.error(error);
+            }
+        }
+
+        function readStore(db, storeName) {
+            const results = document.getElementById('results');
+            
+            try {
+                const transaction = db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const data = request.result;
+                    results.innerHTML += `<p class="success">✅ Store "${storeName}": Found ${data.length} items</p>`;
+                    
+                    if (data.length > 0) {
+                        allQuizzes = data;
+                        displayQuizzes(data);
+                    }
+                };
+
+                request.onerror = () => {
+                    results.innerHTML += `<p class="error">❌ Error reading store "${storeName}"</p>`;
+                };
+
+                // Also try getAllKeys
+                const keysRequest = store.getAllKeys();
+                keysRequest.onsuccess = () => {
+                    const keys = keysRequest.result;
+                    results.innerHTML += `<p>🔑 Keys: ${keys.join(', ')}</p>`;
+                    
+                    // Read each key individually
+                    keys.forEach(key => {
+                        const getRequest = store.get(key);
+                        getRequest.onsuccess = () => {
+                            const item = getRequest.result;
+                            if (item && item.questions) {
+                                results.innerHTML += `<p class="success">📝 Found quiz: ${item.title || key} (${item.questions.length} questions)</p>`;
+                            }
+                        };
+                    });
+                };
+
+            } catch (error) {
+                results.innerHTML += `<p class="error">❌ Error reading store: ${error.message}</p>`;
+            }
+        }
+
+        function displayQuizzes(quizzes) {
+            const quizList = document.getElementById('quiz-list');
+            const section = document.getElementById('quizzes-section');
+            section.style.display = 'block';
+
+            quizList.innerHTML = '<h3>📚 Available Quizzes:</h3>';
+
+            quizzes.forEach((quiz, index) => {
+                const div = document.createElement('div');
+                div.className = 'quiz-item';
+                div.innerHTML = `
+                    <h4>${quiz.title || `Quiz ${index + 1}`}</h4>
+                    <p>❓ Questions: ${quiz.questions?.length || 0}</p>
+                    <p>📅 Created: ${quiz.createdAt ? new Date(quiz.createdAt).toLocaleString() : 'Unknown'}</p>
+                    <p>🆔 ID: ${quiz.id}</p>
+                    <button onclick="selectQuiz(${index})">Select This Quiz</button>
+                `;
+                quizList.appendChild(div);
+            });
+        }
+
+        window.selectQuiz = function(index) {
+            selectedQuiz = allQuizzes[index];
+            const preview = document.getElementById('preview');
+            const section = document.getElementById('preview-section');
+            section.style.display = 'block';
+
+            preview.innerHTML = `
+                <div class="success">
+                    <h3>✅ Selected: ${selectedQuiz.title}</h3>
+                    <p><strong>Questions:</strong> ${selectedQuiz.questions.length}</p>
+                    <p><strong>Subject:</strong> ${selectedQuiz.subject || 'N/A'}</p>
+                    <p><strong>Chapters:</strong> ${selectedQuiz.chapters?.join(', ') || 'N/A'}</p>
+                </div>
+                <h4>Preview (first 3 questions):</h4>
+                <pre>${JSON.stringify(selectedQuiz.questions.slice(0, 3), null, 2)}</pre>
+            `;
+
+            // Scroll to preview
+            section.scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.downloadSelected = function() {
+            if (!selectedQuiz) {
+                alert('Please select a quiz first');
+                return;
+            }
+
+            const blob = new Blob([JSON.stringify(selectedQuiz, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${selectedQuiz.title.replace(/[^a-z0-9]/gi, '_')}_recovered.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            alert('✅ Quiz data downloaded! You can now import this in the admin panel.');
+        };
+
+        window.uploadToFirebase = async function() {
+            if (!selectedQuiz) {
+                alert('Please select a quiz first');
+                return;
+            }
+
+            if (!confirm(`Upload "${selectedQuiz.title}" to Firebase?\n\nThis will restore the quiz with all ${selectedQuiz.questions.length} questions.`)) {
+                return;
+            }
+
+            try {
+                // Import Firebase
+                const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+                const { getFirestore, doc, setDoc, collection } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+                const { Timestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCNtLxhRuU82S9JDmxp0-EI9FbTgcGVYRk",
+                    authDomain: "quiz-master-c4d2f.firebaseapp.com",
+                    projectId: "quiz-master-c4d2f",
+                    storageBucket: "quiz-master-c4d2f.firebasestorage.app",
+                    messagingSenderId: "694551034629",
+                    appId: "1:694551034629:web:e7f4ae27f77d0e19ce1f72"
+                };
+
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+
+                // Save metadata
+                const metadata = {
+                    id: selectedQuiz.id,
+                    title: selectedQuiz.title,
+                    description: selectedQuiz.description,
+                    subject: selectedQuiz.subject,
+                    chapters: selectedQuiz.chapters,
+                    createdAt: selectedQuiz.createdAt || Date.now(),
+                    defaultTimerMinutes: selectedQuiz.defaultTimerMinutes || 30,
+                    questionCount: selectedQuiz.questions.length,
+                    published: selectedQuiz.published || false,
+                    lastModified: Timestamp.now(),
+                    usesFirebaseStorage: true,
+                    usesSubcollections: true,
+                    createdBy: 'recovery-tool'
+                };
+
+                const quizDocRef = doc(db, 'quizzes', selectedQuiz.id);
+                await setDoc(quizDocRef, metadata);
+                
+                // Save questions in chunks
+                const CHUNK_SIZE = 10;
+                const chunks = [];
+                for (let i = 0; i < selectedQuiz.questions.length; i += CHUNK_SIZE) {
+                    chunks.push(selectedQuiz.questions.slice(i, i + CHUNK_SIZE));
+                }
+
+                for (let i = 0; i < chunks.length; i++) {
+                    const chunkDocRef = doc(db, 'quizzes', selectedQuiz.id, 'questions', `chunk_${i}`);
+                    await setDoc(chunkDocRef, {
+                        chunkIndex: i,
+                        questions: chunks[i],
+                        createdAt: Timestamp.now()
+                    });
+                }
+
+                alert(`✅ Success! Uploaded ${selectedQuiz.questions.length} questions in ${chunks.length} chunks to Firebase!`);
+                
+            } catch (error) {
+                alert(`❌ Error uploading to Firebase: ${error.message}`);
+                console.error(error);
+            }
+        };
+
+        // Auto-extract on load
+        window.addEventListener('load', () => {
+            setTimeout(extractAllBackups, 500);
+        });
+    </script>
+</body>
+</html>

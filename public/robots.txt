@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://lohits.netlify.app/sitemap.xml

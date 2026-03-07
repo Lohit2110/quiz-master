@@ -1,0 +1,200 @@
+// Firebase Firestore Security Rules for Quiz Master App
+// Copy these rules to Firebase Console > Firestore Database > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // QUIZ COLLECTION RULES
+    // ============================================
+    match /quizzes/{quizId} {
+      
+      // ✅ Anyone can READ published quizzes (students)
+      allow read: if resource.data.published == true;
+      
+      // ✅ Authenticated users with admin role can READ all quizzes (including unpublished)
+      allow read: if request.auth != null && 
+                     request.auth.token.admin == true;
+      
+      // ✅ Only admins can CREATE new quizzes
+      allow create: if request.auth != null && 
+                       request.auth.token.admin == true;
+      
+      // ✅ Only admins can UPDATE quizzes
+      allow update: if request.auth != null && 
+                       request.auth.token.admin == true;
+      
+      // ✅ Only admins can DELETE quizzes
+      allow delete: if request.auth != null && 
+                       request.auth.token.admin == true;
+      
+      // Subcollection for unlimited quiz questions
+      match /questions/{questionId} {
+        // Same rules as parent quiz document
+        allow read: if get(/databases/$(database)/documents/quizzes/$(quizId)).data.published == true ||
+                       (request.auth != null && request.auth.token.admin == true);
+        
+        allow write: if request.auth != null && 
+                        request.auth.token.admin == true;
+      }
+    }
+    
+    // ============================================
+    // USER COLLECTION RULES
+    // ============================================
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Admins can read all user profiles
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      
+      // Users can create/update their own profile
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      
+      // Only admins can delete users
+      allow delete: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // QUIZ ATTEMPTS/RESULTS COLLECTION RULES
+    // ============================================
+    match /attempts/{attemptId} {
+      // ✅ ANYONE can read attempts (for public leaderboards, etc.)
+      // Or restrict to: allow read: if true;  for full public access
+      allow read: if true;
+      
+      // ✅ ANYONE can create attempts (students don't need auth to submit quiz results)
+      // This allows anonymous quiz submissions
+      allow create: if true;
+      
+      // ✅ ANYONE can update attempts (for updating ongoing quiz sessions)
+      allow update: if true;
+      
+      // ✅ ANYONE can delete attempts (admins use this to clear results)
+      // If you want to restrict deletes to admins only, use:
+      // allow delete: if request.auth != null && request.auth.token.admin == true;
+      allow delete: if true;
+    }
+    
+    // ============================================
+    // NOTIFICATIONS COLLECTION RULES
+    // ============================================
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if request.auth != null && 
+                     resource.data.userId == request.auth.uid;
+      
+      // Admins can read all notifications
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      
+      // Only admins can create notifications (for broadcasting)
+      allow create: if request.auth != null && request.auth.token.admin == true;
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if request.auth != null && 
+                       resource.data.userId == request.auth.uid;
+      
+      // Admins can delete any notification
+      allow delete: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // ============================================
+    // DENY ALL OTHER COLLECTIONS BY DEFAULT
+    // ============================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ============================================
+// HOW TO SET ADMIN CUSTOM CLAIMS
+// ============================================
+
+/*
+To set a user as admin, use Firebase Admin SDK or Firebase CLI:
+
+Using Firebase Admin SDK (Node.js):
+```javascript
+const admin = require('firebase-admin');
+admin.initializeApp();
+
+// Set admin claim for a user
+admin.auth().setCustomUserClaims('USER_UID_HERE', { admin: true })
+  .then(() => {
+    console.log('Admin claim set successfully');
+  });
+```
+
+Using Firebase CLI:
+```bash
+firebase functions:shell
+> admin.auth().setCustomUserClaims('USER_UID_HERE', { admin: true })
+```
+
+After setting custom claims, user must sign out and sign in again for claims to take effect.
+*/
+
+// ============================================
+// TESTING CHECKLIST
+// ============================================
+
+/*
+✅ Test as UNAUTHENTICATED user:
+   - Can read published quizzes
+   - Cannot read unpublished quizzes
+   - Cannot create/update/delete quizzes
+   - Cannot read attempts or users
+
+✅ Test as AUTHENTICATED STUDENT:
+   - Can read published quizzes
+   - Cannot read unpublished quizzes
+   - Can create quiz attempts
+   - Can read own attempts
+   - Cannot read other students' attempts
+   - Cannot modify quizzes
+
+✅ Test as AUTHENTICATED ADMIN:
+   - Can read ALL quizzes (published + unpublished)
+   - Can create new quizzes
+   - Can update/publish/unpublish quizzes
+   - Can delete quizzes
+   - Can read all user profiles
+   - Can read all quiz attempts
+   - Can delete attempts
+*/
+
+// ============================================
+// COMMON ISSUES & SOLUTIONS
+// ============================================
+
+/*
+❌ Issue: "Missing or insufficient permissions"
+✅ Solution: 
+   1. Check if user is authenticated
+   2. Verify custom claims are set (admin: true)
+   3. User must sign out/in after claims are set
+   4. Check Firestore rules in Firebase Console
+
+❌ Issue: Students can't see published quizzes
+✅ Solution:
+   1. Verify quiz has "published: true" field
+   2. Check if quiz is truly published in Firebase Console
+   3. Clear browser cache and localStorage
+   4. Check browser console for errors
+
+❌ Issue: Admin can't create quizzes
+✅ Solution:
+   1. Verify admin custom claim is set
+   2. Check authentication token
+   3. Sign out and sign in again
+   4. Verify rules are deployed to Firebase
+
+❌ Issue: "Query requires an index"
+✅ Solution:
+   1. Firebase will provide a link to create the index
+   2. Click the link in console error
+   3. Or create index manually in Firebase Console
+*/

@@ -1,21 +1,169 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Container, Row, Col, Card, Button, ProgressBar, Badge } from 'react-bootstrap';
-import { QuizSession, QuizQuestion } from '../types';
+import { QuizSession, QuizQuestion, QuizResult } from '../types';
 import { StorageUtils, QuizUtils } from '../utils/storage';
+import { StudentResultsService } from '../services/StudentResultsService';
+import { useQuizContext } from '../contexts/QuizContext';
 import './Quiz.css';
 
 const Quiz: React.FC = () => {
+  const { quizzes: savedQuizzes } = useQuizContext();
   const [session, setSession] = useState<QuizSession | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0); // Time left in seconds
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState<number>(10); // Timer duration in minutes
 
+  // Track if quiz has already been submitted to prevent double submission
+  const hasSubmittedRef = useRef(false);
+
   useEffect(() => {
-    initializeQuiz();
-  }, []);
+    // Wait for quizzes to load from QuizContext before initializing
+    if (savedQuizzes.length > 0) {
+      initializeQuiz();
+    }
+  }, [savedQuizzes]); // Re-run when quizzes are loaded
+
+  /**
+   * UNIFIED Quiz Completion Handler
+   * This function handles ALL quiz completion scenarios:
+   * 1. Manual submit button click
+   * 2. Auto-submit when timer expires
+   * 3. Completing the last question
+   * 
+   * It saves results to Firebase using StudentResultsService
+   */
+  const completeQuiz = useCallback(async (completedSession: QuizSession): Promise<void> => {
+    // Prevent double submission
+    if (hasSubmittedRef.current) {
+      console.log('⚠️ Quiz already submitted, skipping...');
+      return;
+    }
+    hasSubmittedRef.current = true;
+    setIsSubmitting(true);
+
+    console.log('═'.repeat(60));
+    console.log('🏁 COMPLETING QUIZ - START');
+    console.log('═'.repeat(60));
+    console.log('📌 Session ID:', completedSession.id);
+    console.log('📌 Questions answered:', Object.keys(completedSession.answers).length);
+    console.log('📌 Total questions:', completedSession.questions.length);
+
+    // Get student info from session storage
+    const studentInfoStr = sessionStorage.getItem('current_student_info');
+    const studentInfo = studentInfoStr ? JSON.parse(studentInfoStr) : null;
+    console.log('👤 Student info from session:', studentInfo);
+
+    // Determine quiz title from QuizContext
+    const urlParams = new URLSearchParams(window.location.search);
+    const savedQuizId = urlParams.get('savedQuiz');
+    let quizTitle = 'Quiz';
+
+    console.log('🔍 Looking for quiz ID:', savedQuizId);
+    console.log('📚 Available quizzes:', savedQuizzes.length);
+
+    if (savedQuizId) {
+      const savedQuiz = savedQuizzes.find(q => q.id === savedQuizId);
+      quizTitle = savedQuiz?.title || 'Saved Quiz';
+      console.log('📝 Found quiz title:', quizTitle);
+    }
+
+    // Calculate results with student info
+    const results: QuizResult = QuizUtils.calculateResults(
+      completedSession,
+      quizTitle,
+      studentInfo?.name || 'Anonymous'
+    );
+
+    // Add student email if available
+    if (studentInfo?.email) {
+      results.studentEmail = studentInfo.email;
+    }
+
+    // Store results for display FIRST (so results page works even if Firebase fails)
+    sessionStorage.setItem('quiz_results', JSON.stringify(results));
+    console.log('💾 Results stored in sessionStorage for display');
+
+    // Log the results being saved
+    console.log('═'.repeat(40));
+    console.log('📊 QUIZ RESULTS TO SAVE:');
+    console.log('   Session ID:', results.sessionId);
+    console.log('   Student:', results.studentName);
+    console.log('   Email:', results.studentEmail || 'N/A');
+    console.log('   Quiz:', results.quizTitle);
+    console.log('   Score:', `${results.totalMarks}/${results.maxMarks} (${results.percentage}%)`);
+    console.log('   Correct:', results.correctAnswers);
+    console.log('   Incorrect:', results.incorrectAnswers);
+    console.log('   Skipped:', results.skippedQuestions);
+    console.log('═'.repeat(40));
+
+    // Save to localStorage as immediate backup
+    StorageUtils.addStudentResult(results);
+    console.log('💾 Saved to localStorage backup');
+
+    // 🔥 SAVE TO FIREBASE - This is the critical step!
+    console.log('🔥🔥🔥 STARTING FIREBASE SAVE 🔥🔥🔥');
+
+    let firebaseSaveSuccess = false;
+    try {
+      // Call the service and WAIT for it to complete
+      console.log('⏳ Calling StudentResultsService.saveResult...');
+      firebaseSaveSuccess = await StudentResultsService.saveResult(results);
+      console.log('📤 Firebase save returned:', firebaseSaveSuccess);
+
+      if (firebaseSaveSuccess) {
+        console.log('✅✅✅ FIREBASE SAVE SUCCESSFUL! ✅✅✅');
+      } else {
+        console.warn('⚠️⚠️⚠️ Firebase save returned false - check service logs above');
+      }
+    } catch (firebaseError: any) {
+      console.error('❌❌❌ FIREBASE SAVE EXCEPTION ❌❌❌');
+      console.error('Error:', firebaseError);
+      console.error('Error message:', firebaseError?.message);
+      console.error('Error code:', firebaseError?.code);
+    }
+
+    // Clear student info from session
+    sessionStorage.removeItem('current_student_info');
+
+    console.log('═'.repeat(60));
+    console.log('✅ QUIZ COMPLETION FINISHED');
+    console.log('   Firebase saved:', firebaseSaveSuccess ? 'YES' : 'NO');
+    console.log('   Navigating to results page...');
+    console.log('═'.repeat(60));
+
+    // Navigate to results page AFTER Firebase save completes
+    window.location.href = '/quiz-results';
+  }, [savedQuizzes]);
+
+  // Auto-submit function for when timer expires
+  const handleAutoSubmit = useCallback(async () => {
+    if (!session || hasSubmittedRef.current) return;
+
+    console.log('⏰ Timer expired - Auto submitting quiz');
+
+    // Save final answer
+    const updatedAnswers = { ...session.answers };
+    if (selectedAnswer && currentQuestion) {
+      updatedAnswers[currentQuestion.id] = selectedAnswer;
+    }
+
+    const completedSession: QuizSession = {
+      ...session,
+      answers: updatedAnswers,
+      isCompleted: true,
+      endTime: Date.now()
+    };
+
+    StorageUtils.saveSession(completedSession);
+    StorageUtils.clearCurrentSession();
+
+    // Use unified completion handler
+    await completeQuiz(completedSession);
+  }, [session, selectedAnswer, currentQuestion, completeQuiz]);
 
   // Timer effect
   useEffect(() => {
@@ -23,17 +171,23 @@ const Quiz: React.FC = () => {
       const timer = setInterval(() => {
         setTimeLeft((prevTime) => {
           if (prevTime <= 1) {
-            // Time's up - auto submit quiz
-            handleSubmitQuiz();
+            // Time's up - auto submit quiz without confirmation
+            handleAutoSubmit();
             return 0;
           }
+
+          // Show warning when 2 minutes (120 seconds) left
+          if (prevTime <= 120 && !showTimeWarning) {
+            setShowTimeWarning(true);
+          }
+
           return prevTime - 1;
         });
       }, 1000);
 
       return () => clearInterval(timer);
     }
-  }, [timeLeft, session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timeLeft, session, showTimeWarning, handleAutoSubmit]);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -44,7 +198,7 @@ const Quiz: React.FC = () => {
   const getTimerColor = (): string => {
     const totalSeconds = timerMinutes * 60;
     const percentage = (timeLeft / totalSeconds) * 100;
-    
+
     if (percentage > 50) return 'success';
     if (percentage > 25) return 'warning';
     return 'danger';
@@ -66,9 +220,9 @@ const Quiz: React.FC = () => {
 
     // Check for existing session
     const existingSession = StorageUtils.getCurrentSession();
-    if (existingSession && 
-        existingSession.categoryId === savedQuizId && 
-        !existingSession.isCompleted) {
+    if (existingSession &&
+      existingSession.categoryId === savedQuizId &&
+      !existingSession.isCompleted) {
       setSession(existingSession);
       setCurrentQuestion(existingSession.questions[existingSession.currentQuestionIndex]);
       setSelectedAnswer('');
@@ -76,19 +230,28 @@ const Quiz: React.FC = () => {
       return;
     }
 
-    // Handle saved quiz only
-    const savedQuiz = StorageUtils.getSavedQuizById(savedQuizId);
-    console.log('Raw saved quiz data:', savedQuiz);
-    
+    // Handle saved quiz only - get from QuizContext (Firebase)
+    const savedQuiz = savedQuizzes.find(q => q.id === savedQuizId);
+    console.log('Looking for quiz ID:', savedQuizId);
+    console.log('Available quizzes:', savedQuizzes.map(q => ({ id: q.id, title: q.title })));
+    console.log('Found saved quiz:', savedQuiz);
+
     if (!savedQuiz) {
-      alert('Saved quiz not found');
+      alert('Saved quiz not found. Please wait for quizzes to load from Firebase.');
       window.location.href = '/quiz-categories';
       return;
     }
 
     // Use ALL questions from the saved quiz - no limitations
-    const questions = savedQuiz.questions;
-    
+    // Shuffle questions using Fisher-Yates algorithm so each student gets a random order
+    // We create a copy so the original order in Firebase is never modified
+    const questions = [...savedQuiz.questions];
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+    console.log('🔀 Questions shuffled for this session');
+
     console.log('=== DETAILED QUIZ DEBUG ===');
     console.log('Saved Quiz ID:', savedQuizId);
     console.log('Saved Quiz Title:', savedQuiz.title);
@@ -129,7 +292,7 @@ const Quiz: React.FC = () => {
     setSession(newSession);
     setCurrentQuestion(questions[0]);
     StorageUtils.saveCurrentSession(newSession);
-    
+
     // Verify what was actually saved
     const verifySession = StorageUtils.getCurrentSession();
     console.log('=== VERIFY SAVED SESSION ===');
@@ -142,7 +305,7 @@ const Quiz: React.FC = () => {
       }
     });
     console.log('=== END VERIFY ===');
-    
+
     setIsLoading(false);
   };
 
@@ -150,7 +313,7 @@ const Quiz: React.FC = () => {
     setSelectedAnswer(answer);
   };
 
-  const handleNext = () => {
+  const handleNext = useCallback(async () => {
     if (!session || !currentQuestion) return;
 
     // Save answer if selected
@@ -162,31 +325,36 @@ const Quiz: React.FC = () => {
     const nextIndex = session.currentQuestionIndex + 1;
     const isLastQuestion = nextIndex >= session.questions.length;
 
-    const updatedSession: QuizSession = {
-      ...session,
-      answers: updatedAnswers,
-      currentQuestionIndex: nextIndex,
-      isCompleted: isLastQuestion,
-      endTime: isLastQuestion ? Date.now() : session.endTime
-    };
-
     if (isLastQuestion) {
-      // Complete quiz
-      StorageUtils.saveSession(updatedSession);
+      // Complete quiz using unified handler
+      const completedSession: QuizSession = {
+        ...session,
+        answers: updatedAnswers,
+        currentQuestionIndex: nextIndex,
+        isCompleted: true,
+        endTime: Date.now()
+      };
+
+      StorageUtils.saveSession(completedSession);
       StorageUtils.clearCurrentSession();
-      
-      // Navigate to results
-      const results = QuizUtils.calculateResults(updatedSession);
-      sessionStorage.setItem('quiz_results', JSON.stringify(results));
-      window.location.href = '/quiz-results';
+
+      // Use unified completion handler
+      await completeQuiz(completedSession);
     } else {
       // Move to next question
+      const updatedSession: QuizSession = {
+        ...session,
+        answers: updatedAnswers,
+        currentQuestionIndex: nextIndex,
+        isCompleted: false
+      };
+
       setSession(updatedSession);
       setCurrentQuestion(session.questions[nextIndex]);
       setSelectedAnswer(updatedAnswers[session.questions[nextIndex].id] || '');
       StorageUtils.saveCurrentSession(updatedSession);
     }
-  };
+  }, [session, currentQuestion, selectedAnswer, completeQuiz]);
 
   const handlePrevious = () => {
     if (!session || session.currentQuestionIndex === 0) return;
@@ -232,18 +400,14 @@ const Quiz: React.FC = () => {
     StorageUtils.saveCurrentSession(updatedSession);
   };
 
-  const handleSubmitQuiz = useCallback(() => {
-    if (!session || !window.confirm('Are you sure you want to submit the quiz? You cannot change your answers after submission.')) {
+  const handleSubmitQuiz = useCallback(async () => {
+    if (!session || hasSubmittedRef.current) return;
+
+    if (!window.confirm('Are you sure you want to submit the quiz? You cannot change your answers after submission.')) {
       return;
     }
 
-    console.log('=== SUBMIT QUIZ DEBUG ===');
-    console.log('Session at submit:', session);
-    console.log('Session questions count at submit:', session.questions.length);
-    console.log('Session answers:', session.answers);
-    console.log('=== END SUBMIT DEBUG ===');
-
-    setIsSubmitting(true);
+    console.log('📝 Manual quiz submission initiated');
 
     // Save final answer
     const updatedAnswers = { ...session.answers };
@@ -258,29 +422,12 @@ const Quiz: React.FC = () => {
       endTime: Date.now()
     };
 
-    console.log('=== COMPLETED SESSION DEBUG ===');
-    console.log('Completed session:', completedSession);
-    console.log('Completed session questions count:', completedSession.questions.length);
-    console.log('Images in completed session:');
-    completedSession.questions.forEach((q, index) => {
-      if (q.imageUrl) {
-        console.log(`  Question ${index + 1}: Has image (${q.imageUrl.substring(0, 50)}...)`);
-      }
-    });
-    console.log('=== END COMPLETED SESSION DEBUG ===');
-
     StorageUtils.saveSession(completedSession);
     StorageUtils.clearCurrentSession();
 
-    // Navigate to results
-    const results = QuizUtils.calculateResults(completedSession);
-    console.log('=== CALCULATED RESULTS DEBUG ===');
-    console.log('Calculated results:', results);
-    console.log('=== END RESULTS DEBUG ===');
-    
-    sessionStorage.setItem('quiz_results', JSON.stringify(results));
-    window.location.href = '/quiz-results';
-  }, [session, selectedAnswer, currentQuestion]);
+    // Use unified completion handler
+    await completeQuiz(completedSession);
+  }, [session, selectedAnswer, currentQuestion, completeQuiz]);
 
   if (isLoading) {
     return (
@@ -313,6 +460,15 @@ const Quiz: React.FC = () => {
 
   return (
     <Container className="py-4">
+      {/* Time Warning Alert */}
+      {showTimeWarning && timeLeft > 0 && timeLeft <= 120 && (
+        <div className="alert alert-warning alert-dismissible mb-3" role="alert">
+          <i className="fas fa-exclamation-triangle me-2"></i>
+          <strong>Time Warning!</strong> Only {Math.floor(timeLeft / 60)} minutes remaining. Quiz will auto-submit when time runs out.
+          <button type="button" className="btn-close" title="Close warning" onClick={() => setShowTimeWarning(false)}></button>
+        </div>
+      )}
+
       {/* Timer Display */}
       <Row className="mb-3">
         <Col>
@@ -347,7 +503,7 @@ const Quiz: React.FC = () => {
                   {Math.round(progress)}%
                 </Badge>
               </div>
-              <ProgressBar now={progress} className="mb-2" style={{height: '8px'}} />
+              <ProgressBar now={progress} className="mb-2" style={{ height: '8px' }} />
             </Card.Body>
           </Card>
         </Col>
@@ -375,41 +531,62 @@ const Quiz: React.FC = () => {
                 {currentQuestion.question}
               </h5>
 
-              {/* Question Image - Full Width if exists */}
-              {currentQuestion.imageUrl && (
-                <div className="text-center mb-4">
-                  <img
-                    src={currentQuestion.imageUrl}
-                    alt="Question"
-                    className="question-image-full"
-                  />
-                </div>
-              )}
+              {/* Question Images — show all (up to 5) */}
+              {(() => {
+                const imgs: string[] = currentQuestion.imageUrls && currentQuestion.imageUrls.length > 0
+                  ? currentQuestion.imageUrls
+                  : currentQuestion.imageUrl
+                    ? [currentQuestion.imageUrl]
+                    : [];
+                if (imgs.length === 0) return null;
+                const isGrid = imgs.length >= 4;
+                return (
+                  <div className={`mb-4 ${imgs.length === 1 ? 'text-center' : 'd-flex gap-2 flex-wrap justify-content-center'}`}>
+                    {imgs.map((src, idx) => (
+                      <img
+                        key={idx}
+                        src={src}
+                        alt={`Question image ${idx + 1}`}
+                        className="question-image-full"
+                        style={imgs.length > 1
+                          ? { maxWidth: isGrid ? '48%' : `${Math.floor(96 / imgs.length)}%`, height: 'auto' }
+                          : undefined}
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Answer Options in 2x2 Grid */}
               <Row className="g-3 mb-4">
-                {Object.entries(currentQuestion.options).map(([key, option]) => (
-                  <Col md={6} key={key}>
-                    <Button
-                      variant={selectedAnswer === key ? 'primary' : 'outline-secondary'}
-                      className={`w-100 text-start p-3 h-auto option-button-grid ${selectedAnswer === key ? 'btn-primary' : ''}`}
-                      onClick={() => handleAnswerSelect(key)}
-                    >
-                      <div className="d-flex align-items-start">
-                        <span 
-                          className={`badge me-3 fw-bold option-badge ${
-                            selectedAnswer === key ? 'option-badge-selected' : 'option-badge-default'
-                          }`}
+                {(['a', 'b', 'c', 'd'] as const)
+                  .filter(key => currentQuestion.options[key as keyof typeof currentQuestion.options]) // Only show options that exist
+                  .map(key => {
+                    const option = currentQuestion.options[key as keyof typeof currentQuestion.options];
+                    return (
+                      <Col xs={12} md={6} key={`option-${currentQuestion.id}-${key}`}>
+                        <Button
+                          variant={selectedAnswer === key ? 'primary' : 'outline-secondary'}
+                          className={`w-100 text-start p-3 h-auto option-button-grid ${selectedAnswer === key ? 'btn-primary' : ''}`}
+                          onClick={() => handleAnswerSelect(key)}
+                          aria-label={`Option ${key.toUpperCase()}: ${option}`}
                         >
-                          {key.toUpperCase()}
-                        </span>
-                        <span className="option-text">
-                          {option}
-                        </span>
-                      </div>
-                    </Button>
-                  </Col>
-                ))}
+                          <div className="d-flex align-items-start gap-2">
+                            <span
+                              className={`badge fw-bold option-badge flex-shrink-0 ${selectedAnswer === key ? 'option-badge-selected' : 'option-badge-default'
+                                }`}
+                              aria-hidden="true"
+                            >
+                              {key.toUpperCase()}
+                            </span>
+                            <span className="option-text flex-grow-1">
+                              {option}
+                            </span>
+                          </div>
+                        </Button>
+                      </Col>
+                    );
+                  })}
               </Row>
 
               {/* Navigation Buttons */}
@@ -529,13 +706,13 @@ const Quiz: React.FC = () => {
                   <small className="text-muted mt-1">Marked for Review</small>
                 </div>
               </div>
-              
+
               {/* Question Grid */}
               <div className="navigation-grid mb-3">
                 {session.questions.map((question, index) => {
                   const isAnswered = Boolean(session.answers[question.id]);
                   const isCurrent = index === session.currentQuestionIndex;
-                  
+
                   return (
                     <Button
                       key={question.id}
@@ -549,7 +726,7 @@ const Quiz: React.FC = () => {
                   );
                 })}
               </div>
-              
+
               {/* Submit Button */}
               <Button
                 variant="danger"

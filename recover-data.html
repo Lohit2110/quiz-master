@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz Data Recovery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 { color: #d63384; }
+        h2 { color: #0d6efd; }
+        button {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0b5ed7; }
+        .success { color: #198754; }
+        .error { color: #dc3545; }
+        .info { color: #0dcaf0; background: #e7f5ff; padding: 10px; border-radius: 5px; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 400px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            font-family: monospace;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Quiz Data Recovery Tool</h1>
+    
+    <div class="info">
+        <strong>📋 Recovery Options:</strong>
+        <ol>
+            <li>Check browser localStorage for cached quiz data</li>
+            <li>Check IndexedDB for any stored quiz backups</li>
+            <li>Access Firebase directly to look for remaining data</li>
+            <li>Check browser console for quiz data in memory</li>
+        </ol>
+    </div>
+
+    <!-- localStorage Recovery -->
+    <div class="section">
+        <h2>1️⃣ LocalStorage Recovery</h2>
+        <button onclick="checkLocalStorage()">Scan LocalStorage</button>
+        <button onclick="clearResults('localStorage-results')">Clear</button>
+        <pre id="localStorage-results"></pre>
+    </div>
+
+    <!-- IndexedDB Recovery -->
+    <div class="section">
+        <h2>2️⃣ IndexedDB Recovery</h2>
+        <button onclick="checkIndexedDB()">Scan IndexedDB</button>
+        <button onclick="clearResults('indexedDB-results')">Clear</button>
+        <pre id="indexedDB-results"></pre>
+    </div>
+
+    <!-- Firebase Direct Access -->
+    <div class="section">
+        <h2>3️⃣ Firebase Direct Query</h2>
+        <p>Quiz ID: <input type="text" id="quizId" value="1765992329927dra8p8nh1" style="width: 400px;"></p>
+        <button onclick="queryFirebase()">Query Firebase</button>
+        <button onclick="clearResults('firebase-results')">Clear</button>
+        <pre id="firebase-results"></pre>
+    </div>
+
+    <!-- Manual Data Input -->
+    <div class="section">
+        <h2>4️⃣ Manual Data Recovery</h2>
+        <p>If you have quiz data from browser console, paste it here:</p>
+        <textarea id="manual-data" placeholder='Paste quiz data here (JSON format)...'></textarea>
+        <button onclick="parseManualData()">Parse & Validate</button>
+        <button onclick="downloadRecoveredData()">Download as Backup</button>
+        <pre id="manual-results"></pre>
+    </div>
+
+    <!-- Console Data Capture -->
+    <div class="section">
+        <h2>5️⃣ Browser Console Capture</h2>
+        <p class="info">
+            <strong>Instructions:</strong><br>
+            1. Open your browser console (F12)<br>
+            2. Run: <code>copy(JSON.stringify(window.__QUIZ_DATA__))</code><br>
+            3. Paste the result into the Manual Data Recovery section above
+        </p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, doc, getDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCNtLxhRuU82S9JDmxp0-EI9FbTgcGVYRk",
+            authDomain: "quiz-master-c4d2f.firebaseapp.com",
+            projectId: "quiz-master-c4d2f",
+            storageBucket: "quiz-master-c4d2f.firebasestorage.app",
+            messagingSenderId: "694551034629",
+            appId: "1:694551034629:web:e7f4ae27f77d0e19ce1f72",
+            measurementId: "G-95X2HX75XK"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        window.db = db;
+
+        // Make functions global
+        window.clearResults = function(id) {
+            document.getElementById(id).textContent = '';
+        };
+
+        window.checkLocalStorage = function() {
+            const results = document.getElementById('localStorage-results');
+            results.textContent = 'Scanning localStorage...\n\n';
+            
+            try {
+                const keys = Object.keys(localStorage);
+                results.textContent += `Found ${keys.length} items in localStorage\n\n`;
+                
+                // Look for quiz-related keys
+                const quizKeys = keys.filter(k => k.includes('quiz'));
+                
+                if (quizKeys.length > 0) {
+                    results.textContent += `📦 Quiz-related keys found:\n`;
+                    quizKeys.forEach(key => {
+                        const value = localStorage.getItem(key);
+                        results.textContent += `\n🔑 Key: ${key}\n`;
+                        results.textContent += `📏 Size: ${value.length} characters\n`;
+                        
+                        try {
+                            const parsed = JSON.parse(value);
+                            if (Array.isArray(parsed)) {
+                                results.textContent += `📊 Type: Array with ${parsed.length} items\n`;
+                                if (parsed.length > 0 && parsed[0].questions) {
+                                    const totalQuestions = parsed.reduce((sum, q) => sum + (q.questions?.length || 0), 0);
+                                    results.textContent += `❓ Total questions: ${totalQuestions}\n`;
+                                }
+                            } else if (parsed.questions) {
+                                results.textContent += `❓ Questions: ${parsed.questions.length}\n`;
+                            }
+                            results.textContent += `\n${JSON.stringify(parsed, null, 2).substring(0, 500)}...\n`;
+                        } catch (e) {
+                            results.textContent += `⚠️ Not JSON data\n`;
+                        }
+                    });
+                } else {
+                    results.textContent += '❌ No quiz-related keys found\n';
+                }
+                
+                // Check all keys for potential quiz data
+                results.textContent += '\n\n📋 All localStorage keys:\n';
+                keys.forEach(key => {
+                    results.textContent += `  - ${key}\n`;
+                });
+                
+            } catch (error) {
+                results.textContent += `❌ Error: ${error.message}\n`;
+            }
+        };
+
+        window.checkIndexedDB = async function() {
+            const results = document.getElementById('indexedDB-results');
+            results.textContent = 'Scanning IndexedDB...\n\n';
+            
+            try {
+                const dbs = await window.indexedDB.databases();
+                results.textContent += `Found ${dbs.length} databases:\n\n`;
+                
+                for (const dbInfo of dbs) {
+                    results.textContent += `📦 Database: ${dbInfo.name} (v${dbInfo.version})\n`;
+                    
+                    // Try to open and read
+                    const request = indexedDB.open(dbInfo.name);
+                    request.onsuccess = function(event) {
+                        const db = event.target.result;
+                        const stores = Array.from(db.objectStoreNames);
+                        results.textContent += `  Stores: ${stores.join(', ')}\n\n`;
+                    };
+                }
+                
+            } catch (error) {
+                results.textContent += `❌ Error: ${error.message}\n`;
+            }
+        };
+
+        window.queryFirebase = async function() {
+            const results = document.getElementById('firebase-results');
+            const quizId = document.getElementById('quizId').value;
+            
+            results.textContent = `Querying Firebase for quiz: ${quizId}\n\n`;
+            
+            try {
+                // Get quiz metadata
+                const quizDocRef = doc(db, 'quizzes', quizId);
+                const quizSnap = await getDoc(quizDocRef);
+                
+                if (!quizSnap.exists()) {
+                    results.textContent += '❌ Quiz not found\n';
+                    return;
+                }
+                
+                const metadata = quizSnap.data();
+                results.textContent += '✅ Quiz found!\n\n';
+                results.textContent += `📝 Title: ${metadata.title}\n`;
+                results.textContent += `❓ Question Count: ${metadata.questionCount}\n`;
+                results.textContent += `📅 Created: ${new Date(metadata.createdAt).toLocaleString()}\n`;
+                results.textContent += `🔄 Modified: ${metadata.lastModified?.toDate?.() || 'N/A'}\n\n`;
+                
+                // Get question chunks
+                const questionsRef = collection(db, 'quizzes', quizId, 'questions');
+                const chunksSnap = await getDocs(questionsRef);
+                
+                results.textContent += `📦 Found ${chunksSnap.size} chunks\n\n`;
+                
+                if (chunksSnap.size === 0) {
+                    results.textContent += '❌ No question chunks found - data was deleted\n';
+                    results.textContent += '💡 Try checking browser cache or localStorage\n';
+                } else {
+                    const chunks = [];
+                    chunksSnap.forEach(doc => {
+                        chunks.push({...doc.data(), id: doc.id});
+                    });
+                    
+                    chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+                    
+                    const questions = chunks.flatMap(chunk => chunk.questions || []);
+                    results.textContent += `✅ Recovered ${questions.length} questions!\n\n`;
+                    results.textContent += JSON.stringify({ ...metadata, questions }, null, 2);
+                    
+                    // Store for download
+                    window.__RECOVERED_DATA__ = { ...metadata, questions };
+                }
+                
+            } catch (error) {
+                results.textContent += `❌ Error: ${error.message}\n`;
+                console.error(error);
+            }
+        };
+
+        window.parseManualData = function() {
+            const results = document.getElementById('manual-results');
+            const data = document.getElementById('manual-data').value;
+            
+            try {
+                const parsed = JSON.parse(data);
+                results.textContent = '✅ Valid JSON!\n\n';
+                
+                if (parsed.questions && Array.isArray(parsed.questions)) {
+                    results.textContent += `❓ Found ${parsed.questions.length} questions\n`;
+                    results.textContent += `📝 Title: ${parsed.title || 'Unknown'}\n\n`;
+                    
+                    window.__RECOVERED_DATA__ = parsed;
+                    results.textContent += JSON.stringify(parsed, null, 2).substring(0, 1000) + '...';
+                } else {
+                    results.textContent += '⚠️ Data doesn\'t look like quiz data (no questions array)\n';
+                }
+            } catch (error) {
+                results.textContent = `❌ Invalid JSON: ${error.message}\n`;
+            }
+        };
+
+        window.downloadRecoveredData = function() {
+            if (!window.__RECOVERED_DATA__) {
+                alert('No recovered data to download. Please recover data first.');
+                return;
+            }
+            
+            const blob = new Blob([JSON.stringify(window.__RECOVERED_DATA__, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `quiz_recovered_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            alert('✅ Downloaded recovered data!');
+        };
+
+        // Auto-scan on load
+        setTimeout(() => {
+            window.checkLocalStorage();
+        }, 500);
+    </script>
+</body>
+</html>

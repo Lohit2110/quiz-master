@@ -1,6 +1,25 @@
 # 🎯 Quiz Master - Complete Quiz Creator Web Application
 
-A comprehensive React.js-based quiz creation and management platform with advanced features including dynamic quiz building, image support, real-time analytics, and responsive design.
+A comprehensive React.js-based quiz creation and management platform with **Firebase Real-Time Integration**, advanced quiz building, image support, live synchronization, push notifications, and responsive design.
+
+## 🔥 **NEW: Firebase Real-Time System**
+
+**Live Demo:** https://lohits.netlify.app
+
+This application now features **Firebase integration** for real-time functionality:
+
+- ⚡ **Instant Quiz Publishing**: Admin publishes → Students see immediately
+- 🔔 **Push Notifications**: Browser notifications for new quizzes
+- ☁️ **Cloud Storage**: All data stored in Firebase Firestore
+- 🔄 **Real-Time Sync**: Live updates across all devices
+- 🔐 **Secure Authentication**: Firebase Auth with role-based access
+- 📊 **Live Analytics**: Real-time student results dashboard
+
+### 🚀 Quick Setup
+See **[QUICK_START.md](QUICK_START.md)** for 5-minute Firebase setup  
+See **[FIREBASE_SETUP.md](FIREBASE_SETUP.md)** for detailed configuration
+
+---
 
 ## ✨ Features
 

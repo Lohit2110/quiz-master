@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Table, Alert } from 'react-bootstrap';
-import { QuizResult } from '../types';
+import { QuizResult, QuizQuestion } from '../types';
 import { QuizUtils, StorageUtils } from '../utils/storage';
 import { PDFGenerator } from '../utils/pdfGenerator';
+import { useQuizContext } from '../contexts/QuizContext';
 import './Quiz.css';
 
 const QuizResults: React.FC = () => {
+  const { quizzes: savedQuizzes } = useQuizContext();
   const [results, setResults] = useState<QuizResult | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -116,12 +118,11 @@ const QuizResults: React.FC = () => {
         console.log('📚 All questions from storage:', allQuestions.length);
         
         // Also try to get from saved quizzes
-        const allSavedQuizzes = StorageUtils.getSavedQuizzes();
-        console.log('💾 All saved quizzes:', allSavedQuizzes);
+        console.log('💾 All saved quizzes:', savedQuizzes);
         console.log('🎯 Category name from results:', results.categoryName);
         
         // Try to find the saved quiz that was used
-        const matchingSavedQuiz = allSavedQuizzes.find(quiz => 
+        const matchingSavedQuiz = savedQuizzes.find(quiz => 
           quiz.title === results.categoryName || 
           quiz.id === results.categoryName ||
           quiz.title.toLowerCase().includes(results.categoryName.toLowerCase())
@@ -131,7 +132,7 @@ const QuizResults: React.FC = () => {
         
         if (matchingSavedQuiz && matchingSavedQuiz.questions) {
           console.log('✅ Using questions from saved quiz');
-          questionsWithAnswers = matchingSavedQuiz.questions.map(question => ({
+          questionsWithAnswers = matchingSavedQuiz.questions.map((question: QuizQuestion) => ({
             ...question,
             userAnswer: 'Not answered',
             isCorrect: false

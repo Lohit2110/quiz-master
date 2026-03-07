@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #00d4ff; }
+        .test-box {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        button {
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+        }
+        button:hover { background: #00b8d9; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        .success { color: #00ff88; }
+        .error { color: #ff4444; }
+        .info { color: #ffcc00; }
+        #log {
+            background: #0f0f23;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔥 Firebase Connection Test</h1>
+    
+    <div class="test-box">
+        <h3>Test Controls</h3>
+        <button id="testConnection">Test Connection</button>
+        <button id="testRead">Read Attempts</button>
+        <button id="testWrite">Write Test Result</button>
+        <button id="clearLog">Clear Log</button>
+    </div>
+
+    <div class="test-box">
+        <h3>Console Log</h3>
+        <div id="log"></div>
+    </div>
+
+    <!-- Firebase SDK from CDN -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase configuration (matching the app config)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRp2rlr4WoPvq-Ut6Vs4cJAoU56qM5Y40",
+            authDomain: "quiz-web-app-109af.firebaseapp.com",
+            projectId: "quiz-web-app-109af",
+            storageBucket: "quiz-web-app-109af.firebasestorage.app",
+            messagingSenderId: "482157581997",
+            appId: "1:482157581997:web:03ae71b62000dfa0ccd824"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        const logDiv = document.getElementById('log');
+        
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        log('Firebase initialized successfully', 'success');
+        log(`Project ID: ${firebaseConfig.projectId}`, 'info');
+
+        // Test Connection
+        document.getElementById('testConnection').addEventListener('click', async () => {
+            log('Testing Firebase connection...', 'info');
+            try {
+                const attemptsRef = collection(db, 'attempts');
+                log('Collection reference created', 'success');
+                
+                const testDoc = doc(db, 'attempts', '_connection_test_');
+                await setDoc(testDoc, { 
+                    test: true, 
+                    timestamp: serverTimestamp() 
+                });
+                log('Write test: SUCCESS', 'success');
+                
+                // Clean up test doc
+                await deleteDoc(testDoc);
+                log('Delete test: SUCCESS', 'success');
+                
+                log('✅ Firebase connection is working!', 'success');
+            } catch (error) {
+                log(`❌ Connection failed: ${error.code || error.message}`, 'error');
+                log(`Error details: ${JSON.stringify(error)}`, 'error');
+            }
+        });
+
+        // Read Attempts
+        document.getElementById('testRead').addEventListener('click', async () => {
+            log('Reading attempts collection...', 'info');
+            try {
+                const attemptsRef = collection(db, 'attempts');
+                const snapshot = await getDocs(attemptsRef);
+                
+                log(`Found ${snapshot.size} attempts`, 'success');
+                
+                if (snapshot.size > 0) {
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        log(`  • ${doc.id}: ${data.studentName || 'Unknown'} - ${data.quizTitle || 'Unknown Quiz'}`, 'info');
+                    });
+                } else {
+                    log('No attempts found in the collection', 'info');
+                }
+            } catch (error) {
+                log(`❌ Read failed: ${error.code || error.message}`, 'error');
+            }
+        });
+
+        // Write Test Result
+        document.getElementById('testWrite').addEventListener('click', async () => {
+            const testId = `test_${Date.now()}`;
+            log(`Writing test result with ID: ${testId}`, 'info');
+            
+            try {
+                const testResult = {
+                    sessionId: testId,
+                    studentName: 'Test Student',
+                    studentEmail: 'test@example.com',
+                    quizTitle: 'Firebase Test Quiz',
+                    categoryName: 'Test Category',
+                    totalQuestions: 10,
+                    correctAnswers: 8,
+                    incorrectAnswers: 1,
+                    skippedQuestions: 1,
+                    score: 80,
+                    percentage: 80,
+                    totalMarks: 8,
+                    maxMarks: 10,
+                    timeTaken: 300,
+                    completedAt: Date.now(),
+                    submittedAt: serverTimestamp(),
+                    isTestData: true
+                };
+
+                log('Creating document reference...', 'info');
+                const docRef = doc(db, 'attempts', testId);
+                
+                log('Calling setDoc...', 'info');
+                await setDoc(docRef, testResult);
+                
+                log(`✅ Test result written successfully!`, 'success');
+                log(`Document ID: ${testId}`, 'success');
+                log('Check Firebase Console to verify the document exists', 'info');
+                
+            } catch (error) {
+                log(`❌ Write failed: ${error.code || error.message}`, 'error');
+                log(`Stack: ${error.stack}`, 'error');
+            }
+        });
+
+        // Clear Log
+        document.getElementById('clearLog').addEventListener('click', () => {
+            logDiv.innerHTML = '';
+            log('Log cleared', 'info');
+        });
+    </script>
+</body>
+</html>

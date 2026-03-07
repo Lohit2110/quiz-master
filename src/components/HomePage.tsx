@@ -12,20 +12,36 @@ const HomePage: React.FC = () => {
         <Container>
           <Row className="text-center">
             <Col>
+              {/* Animated Brain Icon */}
+              <div className="hero-icon">
+                <i className="fas fa-brain"></i>
+              </div>
               <h1 className="display-4 fw-bold mb-3">
-                <i className="fas fa-brain me-3"></i>
                 Welcome to Quiz Master
               </h1>
-              <p className="lead mb-4">
+              <p className="lead mb-3">
                 The ultimate quiz creation and management platform. Create engaging quizzes, 
                 test your knowledge, and track your progress with our comprehensive quiz system.
               </p>
+              <p className="hero-tagline mb-4">
+                "Create quizzes in minutes. Practice smarter, not harder."
+              </p>
               <div className="d-flex gap-3 justify-content-center flex-wrap">
-                <Button variant="light" size="lg" onClick={() => navigate('/quiz-categories')}>
+                <Button 
+                  variant="light" 
+                  size="lg" 
+                  className="btn-pill px-4"
+                  onClick={() => navigate('/quiz-categories')}
+                >
                   <i className="fas fa-play me-2"></i>
                   Take a Quiz
                 </Button>
-                <Button variant="outline-light" size="lg" onClick={() => navigate('/create-quiz')}>
+                <Button 
+                  variant="outline-light" 
+                  size="lg" 
+                  className="btn-pill px-4"
+                  onClick={() => navigate('/create-quiz')}
+                >
                   <i className="fas fa-plus-circle me-2"></i>
                   Create Quiz
                 </Button>
@@ -39,8 +55,8 @@ const HomePage: React.FC = () => {
       <Container className="py-5">
         <Row className="text-center mb-5">
           <Col>
-            <h2 className="display-5 fw-bold">Powerful Features</h2>
-            <p className="lead text-muted">
+            <h2 className="section-title">Powerful Features</h2>
+            <p className="section-subtitle">
               Everything you need to create, manage, and take quizzes
             </p>
           </Col>
@@ -48,13 +64,13 @@ const HomePage: React.FC = () => {
 
         <Row className="g-4">
           <Col lg={4} md={6}>
-            <Card className="h-100 shadow-sm border-0">
+            <Card className="feature-card h-100 border-0">
               <Card.Body className="text-center p-4">
-                <div className="feature-icon mb-3">
-                  <i className="fas fa-palette fa-3x text-primary"></i>
+                <div className="feature-icon primary">
+                  <i className="fas fa-palette"></i>
                 </div>
-                <h5 className="fw-bold">Dynamic Quiz Builder</h5>
-                <p className="text-muted">
+                <h5 className="feature-title">Dynamic Quiz Builder</h5>
+                <p className="feature-description">
                   Create quizzes with multiple question types, image support, 
                   and drag-and-drop functionality. Build comprehensive quizzes in minutes.
                 </p>
@@ -63,13 +79,13 @@ const HomePage: React.FC = () => {
           </Col>
 
           <Col lg={4} md={6}>
-            <Card className="h-100 shadow-sm border-0">
+            <Card className="feature-card h-100 border-0">
               <Card.Body className="text-center p-4">
-                <div className="feature-icon mb-3">
-                  <i className="fas fa-images fa-3x text-success"></i>
+                <div className="feature-icon success">
+                  <i className="fas fa-images"></i>
                 </div>
-                <h5 className="fw-bold">Advanced Image Support</h5>
-                <p className="text-muted">
+                <h5 className="feature-title">Advanced Image Support</h5>
+                <p className="feature-description">
                   Upload images via file browser, drag-and-drop, or paste from clipboard. 
                   Support for all major image formats with real-time preview.
                 </p>
@@ -78,13 +94,13 @@ const HomePage: React.FC = () => {
           </Col>
 
           <Col lg={4} md={6}>
-            <Card className="h-100 shadow-sm border-0">
+            <Card className="feature-card h-100 border-0">
               <Card.Body className="text-center p-4">
-                <div className="feature-icon mb-3">
-                  <i className="fas fa-chart-line fa-3x text-info"></i>
+                <div className="feature-icon info">
+                  <i className="fas fa-chart-line"></i>
                 </div>
-                <h5 className="fw-bold">Comprehensive Analytics</h5>
-                <p className="text-muted">
+                <h5 className="feature-title">Comprehensive Analytics</h5>
+                <p className="feature-description">
                   Track performance with detailed results, progress tracking, 
                   and exportable PDF reports for thorough analysis.
                 </p>
@@ -93,13 +109,13 @@ const HomePage: React.FC = () => {
           </Col>
 
           <Col lg={4} md={6}>
-            <Card className="h-100 shadow-sm border-0">
+            <Card className="feature-card h-100 border-0">
               <Card.Body className="text-center p-4">
-                <div className="feature-icon mb-3">
-                  <i className="fas fa-mobile-alt fa-3x text-warning"></i>
+                <div className="feature-icon warning">
+                  <i className="fas fa-mobile-alt"></i>
                 </div>
-                <h5 className="fw-bold">Responsive Design</h5>
-                <p className="text-muted">
+                <h5 className="feature-title">Responsive Design</h5>
+                <p className="feature-description">
                   Works perfectly on all devices - desktop, tablet, and mobile. 
                   Take quizzes anywhere with our mobile-optimized interface.
                 </p>
@@ -108,13 +124,13 @@ const HomePage: React.FC = () => {
           </Col>
 
           <Col lg={4} md={6}>
-            <Card className="h-100 shadow-sm border-0">
+            <Card className="feature-card h-100 border-0">
               <Card.Body className="text-center p-4">
-                <div className="feature-icon mb-3">
-                  <i className="fas fa-cogs fa-3x text-danger"></i>
+                <div className="feature-icon danger">
+                  <i className="fas fa-cogs"></i>
                 </div>
-                <h5 className="fw-bold">Admin Dashboard</h5>
-                <p className="text-muted">
+                <h5 className="feature-title">Admin Dashboard</h5>
+                <p className="feature-description">
                   Powerful admin panel for managing questions, categories, 
                   and quiz settings. Full CRUD operations with bulk editing.
                 </p>
@@ -123,13 +139,13 @@ const HomePage: React.FC = () => {
           </Col>
 
           <Col lg={4} md={6}>
-            <Card className="h-100 shadow-sm border-0">
+            <Card className="feature-card h-100 border-0">
               <Card.Body className="text-center p-4">
-                <div className="feature-icon mb-3">
-                  <i className="fas fa-random fa-3x text-secondary"></i>
+                <div className="feature-icon primary">
+                  <i className="fas fa-random"></i>
                 </div>
-                <h5 className="fw-bold">Flexible Quiz Options</h5>
-                <p className="text-muted">
+                <h5 className="feature-title">Flexible Quiz Options</h5>
+                <p className="feature-description">
                   Custom quiz length, random or sequential questions, 
                   category filtering, and personalized quiz experiences.
                 </p>
@@ -140,31 +156,31 @@ const HomePage: React.FC = () => {
       </Container>
 
       {/* Quick Stats Section */}
-      <div className="bg-light py-5">
+      <div className="stats-section py-5">
         <Container>
           <Row className="text-center">
             <Col md={3} sm={6} className="mb-4">
-              <div className="stat-item">
-                <h3 className="display-6 fw-bold text-primary">∞</h3>
-                <p className="text-muted">Unlimited Quizzes</p>
+              <div className="stat-card">
+                <div className="stat-number">∞</div>
+                <p className="stat-label">Unlimited Quizzes</p>
               </div>
             </Col>
             <Col md={3} sm={6} className="mb-4">
-              <div className="stat-item">
-                <h3 className="display-6 fw-bold text-success">∞</h3>
-                <p className="text-muted">Questions per Quiz</p>
+              <div className="stat-card">
+                <div className="stat-number">∞</div>
+                <p className="stat-label">Questions per Quiz</p>
               </div>
             </Col>
             <Col md={3} sm={6} className="mb-4">
-              <div className="stat-item">
-                <h3 className="display-6 fw-bold text-info">100%</h3>
-                <p className="text-muted">Mobile Responsive</p>
+              <div className="stat-card">
+                <div className="stat-number">100%</div>
+                <p className="stat-label">Mobile Responsive</p>
               </div>
             </Col>
             <Col md={3} sm={6} className="mb-4">
-              <div className="stat-item">
-                <h3 className="display-6 fw-bold text-warning">24/7</h3>
-                <p className="text-muted">Available Access</p>
+              <div className="stat-card">
+                <div className="stat-number">24/7</div>
+                <p className="stat-label">Available Access</p>
               </div>
             </Col>
           </Row>
@@ -175,16 +191,26 @@ const HomePage: React.FC = () => {
       <Container className="py-5">
         <Row className="text-center">
           <Col>
-            <h2 className="display-5 fw-bold mb-3">Ready to Get Started?</h2>
-            <p className="lead text-muted mb-4">
+            <h2 className="section-title mb-3">Ready to Get Started?</h2>
+            <p className="section-subtitle mb-4">
               Join thousands of users who are already creating and taking amazing quizzes!
             </p>
             <div className="d-flex gap-3 justify-content-center flex-wrap">
-              <Button variant="primary" size="lg" onClick={() => navigate('/create-quiz')}>
+              <Button 
+                variant="primary" 
+                size="lg" 
+                className="btn-pill px-4"
+                onClick={() => navigate('/create-quiz')}
+              >
                 <i className="fas fa-rocket me-2"></i>
                 Create Your First Quiz
               </Button>
-              <Button variant="outline-primary" size="lg" onClick={() => navigate('/quiz-categories')}>
+              <Button 
+                variant="outline-primary" 
+                size="lg" 
+                className="btn-pill px-4"
+                onClick={() => navigate('/quiz-categories')}
+              >
                 <i className="fas fa-eye me-2"></i>
                 Explore Categories
               </Button>

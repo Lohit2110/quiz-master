@@ -1,14 +1,15 @@
 import React from 'react';
 import { Container, Card, Button, Alert } from 'react-bootstrap';
 import { StorageUtils } from '../utils/storage';
+import { useQuizContext } from '../contexts/QuizContext';
 
 const QuizRecovery: React.FC = () => {
+  const { quizzes: savedQuizzes } = useQuizContext();
   const [message, setMessage] = React.useState<string>('');
   const [messageType, setMessageType] = React.useState<'success' | 'danger' | 'info'>('info');
 
   const checkSavedQuizzes = () => {
     try {
-      const savedQuizzes = StorageUtils.getSavedQuizzes();
       const questions = StorageUtils.getQuestions();
       const categories = StorageUtils.getCategories();
       

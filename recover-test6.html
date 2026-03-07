@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recover TEST 6 Quiz</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        #status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        #status.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .quiz-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Recover TEST 6 Quiz</h1>
+        <p class="subtitle">Let's try to find and restore your deleted TEST 6 quiz</p>
+
+        <div style="margin: 20px 0;">
+            <button onclick="checkFirebase()">Check Firebase Database</button>
+            <button onclick="checkLocalStorage()">Check Browser Cache</button>
+            <button onclick="checkAllBrowsers()">Check All Storage</button>
+            <button onclick="showInstructions()">Recovery Instructions</button>
+        </div>
+
+        <div id="status"></div>
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        // Import Firebase
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, doc, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRp2rlr4WoPvq-Ut6Vs4cJAoU56qM5Y40",
+            authDomain: "quiz-web-app-109af.firebaseapp.com",
+            projectId: "quiz-web-app-109af",
+            storageBucket: "quiz-web-app-109af.firebasestorage.app",
+            messagingSenderId: "738788892598",
+            appId: "1:738788892598:web:e6c1f7f28dc09c1bbf4df1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = type;
+            statusDiv.style.display = 'block';
+        }
+
+        function showResults(html) {
+            document.getElementById('results').innerHTML = html;
+        }
+
+        // Check Firebase
+        window.checkFirebase = async function() {
+            showStatus('🔍 Searching Firebase database...', 'info');
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                
+                let html = '<h3>📊 Firebase Database Results:</h3>';
+                html += `<p>Found ${snapshot.size} total quizzes in Firebase</p>`;
+                
+                let test6Found = false;
+                let test6Data = null;
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const title = data.title || 'Untitled';
+                    
+                    html += `<div class="quiz-item">`;
+                    html += `<strong>📚 ${title}</strong><br>`;
+                    html += `ID: ${doc.id}<br>`;
+                    html += `Questions: ${data.questions?.length || 0}<br>`;
+                    html += `Published: ${data.published ? 'Yes ✅' : 'No ❌'}<br>`;
+                    html += `Created: ${new Date(data.createdAt).toLocaleString()}<br>`;
+                    
+                    if (title.toLowerCase().includes('test 6') || title.toLowerCase().includes('test6')) {
+                        test6Found = true;
+                        test6Data = { id: doc.id, ...data };
+                        html += `<button onclick="restoreQuiz('${doc.id}')">Restore This Quiz</button>`;
+                        html += `<div class="highlight">⭐ FOUND TEST 6!</div>`;
+                    }
+                    
+                    html += `</div>`;
+                });
+                
+                if (test6Found) {
+                    showStatus('✅ TEST 6 found in Firebase!', 'success');
+                } else {
+                    showStatus('❌ TEST 6 not found in Firebase database', 'error');
+                    html += '<p><strong>TEST 6 was not found in Firebase. It may have been permanently deleted.</strong></p>';
+                }
+                
+                showResults(html);
+            } catch (error) {
+                showStatus('❌ Error accessing Firebase: ' + error.message, 'error');
+            }
+        };
+
+        // Check localStorage
+        window.checkLocalStorage = function() {
+            showStatus('🔍 Checking browser cache...', 'info');
+            try {
+                const savedQuizzes = JSON.parse(localStorage.getItem('quiz_master_saved_quizzes') || '[]');
+                
+                let html = '<h3>💾 Browser Cache Results:</h3>';
+                html += `<p>Found ${savedQuizzes.length} quizzes in cache</p>`;
+                
+                let test6Found = false;
+                
+                savedQuizzes.forEach(quiz => {
+                    html += `<div class="quiz-item">`;
+                    html += `<strong>📚 ${quiz.title}</strong><br>`;
+                    html += `Questions: ${quiz.questions?.length || 0}<br>`;
+                    html += `Created: ${new Date(quiz.createdAt).toLocaleString()}<br>`;
+                    
+                    if (quiz.title.toLowerCase().includes('test 6') || quiz.title.toLowerCase().includes('test6')) {
+                        test6Found = true;
+                        html += `<div class="highlight">⭐ FOUND TEST 6 in cache!</div>`;
+                        html += `<button onclick="uploadToFirebase('${quiz.id}')">Upload to Firebase</button>`;
+                    }
+                    
+                    html += `</div>`;
+                });
+                
+                if (test6Found) {
+                    showStatus('✅ TEST 6 found in browser cache!', 'success');
+                } else {
+                    showStatus('❌ TEST 6 not found in browser cache', 'error');
+                }
+                
+                showResults(html);
+            } catch (error) {
+                showStatus('❌ Error reading cache: ' + error.message, 'error');
+            }
+        };
+
+        // Check all storage locations
+        window.checkAllBrowsers = async function() {
+            showStatus('🔍 Comprehensive search in progress...', 'info');
+            
+            let html = '<h3>🔎 Comprehensive Search Results:</h3>';
+            
+            // Check localStorage
+            const savedQuizzes = JSON.parse(localStorage.getItem('quiz_master_saved_quizzes') || '[]');
+            html += `<h4>💾 Browser Cache: ${savedQuizzes.length} quizzes</h4>`;
+            const localTest6 = savedQuizzes.find(q => q.title.toLowerCase().includes('test 6') || q.title.toLowerCase().includes('test6'));
+            if (localTest6) {
+                html += '<div class="highlight">✅ Found TEST 6 in browser cache!</div>';
+            }
+            
+            // Check Firebase
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                html += `<h4>☁️ Firebase: ${snapshot.size} quizzes</h4>`;
+                
+                let firebaseTest6 = null;
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.title && (data.title.toLowerCase().includes('test 6') || data.title.toLowerCase().includes('test6'))) {
+                        firebaseTest6 = { id: doc.id, ...data };
+                    }
+                });
+                
+                if (firebaseTest6) {
+                    html += '<div class="highlight">✅ Found TEST 6 in Firebase!</div>';
+                    html += `<button onclick="restoreQuiz('${firebaseTest6.id}')">Restore from Firebase</button>`;
+                } else {
+                    html += '<p>❌ TEST 6 not found in Firebase</p>';
+                }
+            } catch (error) {
+                html += `<p>⚠️ Error checking Firebase: ${error.message}</p>`;
+            }
+            
+            // Check sessionStorage
+            const sessionData = sessionStorage.getItem('quiz_master_saved_quizzes');
+            if (sessionData) {
+                const sessionQuizzes = JSON.parse(sessionData);
+                html += `<h4>📋 Session Storage: ${sessionQuizzes.length} quizzes</h4>`;
+                const sessionTest6 = sessionQuizzes.find(q => q.title.toLowerCase().includes('test 6'));
+                if (sessionTest6) {
+                    html += '<div class="highlight">✅ Found TEST 6 in session storage!</div>';
+                }
+            }
+            
+            if (!localTest6 && !firebaseTest6) {
+                html += '<div class="highlight">';
+                html += '<h4>❌ TEST 6 Not Found Anywhere</h4>';
+                html += '<p>The quiz appears to have been permanently deleted from all storage locations.</p>';
+                html += '<p><strong>Options:</strong></p>';
+                html += '<ul>';
+                html += '<li>Check other browsers/devices where you might have accessed the app</li>';
+                html += '<li>Recreate TEST 6 manually</li>';
+                html += '<li>Check if you have a backup</li>';
+                html += '</ul>';
+                html += '</div>';
+                showStatus('❌ TEST 6 not found in any storage location', 'error');
+            } else {
+                showStatus('✅ Search complete - results below', 'success');
+            }
+            
+            showResults(html);
+        };
+
+        // Restore quiz from Firebase
+        window.restoreQuiz = async function(quizId) {
+            showStatus('🔄 Restoring quiz...', 'info');
+            try {
+                // Get from Firebase
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                
+                let quizToRestore = null;
+                snapshot.forEach((doc) => {
+                    if (doc.id === quizId) {
+                        quizToRestore = { id: doc.id, ...doc.data() };
+                    }
+                });
+                
+                if (quizToRestore) {
+                    // Add to localStorage
+                    const savedQuizzes = JSON.parse(localStorage.getItem('quiz_master_saved_quizzes') || '[]');
+                    const exists = savedQuizzes.find(q => q.id === quizToRestore.id);
+                    
+                    if (!exists) {
+                        savedQuizzes.push(quizToRestore);
+                        localStorage.setItem('quiz_master_saved_quizzes', JSON.stringify(savedQuizzes));
+                    }
+                    
+                    showStatus('✅ Quiz restored successfully!', 'success');
+                    showResults(`
+                        <div class="highlight">
+                            <h3>✅ Success!</h3>
+                            <p><strong>${quizToRestore.title}</strong> has been restored!</p>
+                            <p>You can now see it at: <a href="https://lohits.netlify.app/quiz-categories" target="_blank">Quiz Categories</a></p>
+                            <button onclick="window.open('https://lohits.netlify.app/quiz-categories', '_blank')">Open Quiz Master</button>
+                        </div>
+                    `);
+                } else {
+                    showStatus('❌ Quiz not found', 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Error restoring: ' + error.message, 'error');
+            }
+        };
+
+        // Show recovery instructions
+        window.showInstructions = function() {
+            showResults(`
+                <div class="highlight">
+                    <h3>📖 Recovery Instructions</h3>
+                    <h4>Option 1: From This Tool</h4>
+                    <ol>
+                        <li>Click "Check All Storage" button above</li>
+                        <li>If TEST 6 is found, click "Restore" button</li>
+                        <li>Go to Quiz Master app to verify</li>
+                    </ol>
+                    
+                    <h4>Option 2: From Browser Console</h4>
+                    <ol>
+                        <li>Go to <a href="https://lohits.netlify.app" target="_blank">lohits.netlify.app</a></li>
+                        <li>Press F12 to open DevTools</li>
+                        <li>Go to Console tab</li>
+                        <li>Run: <code>await cloudSync.syncCloudToLocal()</code></li>
+                        <li>Refresh the page</li>
+                    </ol>
+                    
+                    <h4>Option 3: Manual Recovery</h4>
+                    <ol>
+                        <li>Open <a href="https://console.firebase.google.com/project/quiz-web-app-109af/firestore" target="_blank">Firebase Console</a></li>
+                        <li>Go to Firestore Database</li>
+                        <li>Look in "quizzes" collection for TEST 6</li>
+                        <li>If found, it will sync automatically when you open the app</li>
+                    </ol>
+                    
+                    <h4>If Not Found:</h4>
+                    <p>If TEST 6 is not in Firebase or cache, it was permanently deleted and needs to be recreated.</p>
+                </div>
+            `);
+            showStatus('📖 Instructions displayed', 'info');
+        };
+
+        // Auto-run comprehensive search on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                checkAllBrowsers();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

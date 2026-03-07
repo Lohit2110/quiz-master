@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Database Check</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #667eea; margin-bottom: 10px; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #5568d3; }
+        .quiz-card {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 6px; margin: 10px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 6px; margin: 10px 0; }
+        .info { background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 6px; margin: 10px 0; }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .field { margin: 5px 0; }
+        .field strong { color: #667eea; }
+        .highlight { background: #fff3cd; padding: 3px 6px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Firebase Database Inspector</h1>
+        <p>Direct inspection of Firebase Firestore database</p>
+
+        <div style="margin: 20px 0;">
+            <button onclick="checkAllQuizzes()">Check All Quizzes</button>
+            <button onclick="checkPublishedOnly()">Check Published Only</button>
+            <button onclick="searchTest6()">Search TEST 6</button>
+            <button onclick="searchTest7()">Search test 7</button>
+            <button onclick="checkFiltering()">Test Query Filtering</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, query, where, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRp2rlr4WoPvq-Ut6Vs4cJAoU56qM5Y40",
+            authDomain: "quiz-web-app-109af.firebaseapp.com",
+            projectId: "quiz-web-app-109af",
+            storageBucket: "quiz-web-app-109af.firebasestorage.app",
+            messagingSenderId: "738788892598",
+            appId: "1:738788892598:web:e6c1f7f28dc09c1bbf4df1"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        function showResults(html) {
+            document.getElementById('results').innerHTML = html;
+        }
+
+        window.checkAllQuizzes = async function() {
+            showResults('<div class="info">🔍 Fetching ALL quizzes from Firebase...</div>');
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                
+                let html = '<h2>📊 All Quizzes in Firebase</h2>';
+                html += `<div class="success">Found ${snapshot.size} total documents</div>`;
+                
+                if (snapshot.size === 0) {
+                    html += '<div class="error">⚠️ NO QUIZZES FOUND IN FIREBASE!</div>';
+                    html += '<p>This means:</p>';
+                    html += '<ul>';
+                    html += '<li>Quizzes are not being saved to Firebase</li>';
+                    html += '<li>OR they are being deleted immediately</li>';
+                    html += '<li>OR there is a Firebase rules issue</li>';
+                    html += '</ul>';
+                } else {
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        html += '<div class="quiz-card">';
+                        html += `<h3>📚 ${data.title || 'Untitled'}</h3>`;
+                        html += `<div class="field"><strong>Document ID:</strong> ${doc.id}</div>`;
+                        html += `<div class="field"><strong>Quiz ID (in data):</strong> ${data.id || 'N/A'}</div>`;
+                        html += `<div class="field"><strong>Published:</strong> <span class="highlight">${data.published || false}</span></div>`;
+                        html += `<div class="field"><strong>isPublished:</strong> <span class="highlight">${data.isPublished || false}</span></div>`;
+                        html += `<div class="field"><strong>Questions:</strong> ${data.questions?.length || 0}</div>`;
+                        html += `<div class="field"><strong>Created:</strong> ${new Date(data.createdAt).toLocaleString()}</div>`;
+                        html += `<div class="field"><strong>Description:</strong> ${data.description || 'N/A'}</div>`;
+                        html += '<details><summary>Full Data (click to expand)</summary>';
+                        html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                        html += '</details>';
+                        html += '</div>';
+                    });
+                }
+                
+                showResults(html);
+            } catch (error) {
+                showResults(`<div class="error">❌ Error: ${error.message}</div><pre>${JSON.stringify(error, null, 2)}</pre>`);
+            }
+        };
+
+        window.checkPublishedOnly = async function() {
+            showResults('<div class="info">🔍 Fetching PUBLISHED quizzes only...</div>');
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const q = query(quizzesRef, where('published', '==', true));
+                const snapshot = await getDocs(q);
+                
+                let html = '<h2>📊 Published Quizzes (published == true)</h2>';
+                html += `<div class="success">Found ${snapshot.size} published quizzes</div>`;
+                
+                if (snapshot.size === 0) {
+                    html += '<div class="error">⚠️ NO PUBLISHED QUIZZES!</div>';
+                    html += '<p>Checking alternate field...</p>';
+                    
+                    // Try isPublished field
+                    const q2 = query(quizzesRef, where('isPublished', '==', true));
+                    const snapshot2 = await getDocs(q2);
+                    html += `<div class="info">isPublished == true: ${snapshot2.size} quizzes</div>`;
+                    
+                    if (snapshot2.size > 0) {
+                        html += '<div class="success">✅ Found quizzes using isPublished field!</div>';
+                        snapshot2.forEach((doc) => {
+                            const data = doc.data();
+                            html += '<div class="quiz-card">';
+                            html += `<h3>📚 ${data.title}</h3>`;
+                            html += `<div class="field"><strong>isPublished:</strong> ${data.isPublished}</div>`;
+                            html += `<div class="field"><strong>published:</strong> ${data.published || 'not set'}</div>`;
+                            html += '</div>';
+                        });
+                    }
+                } else {
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        html += '<div class="quiz-card">';
+                        html += `<h3>📚 ${data.title}</h3>`;
+                        html += `<div class="field"><strong>published:</strong> ${data.published}</div>`;
+                        html += `<div class="field"><strong>isPublished:</strong> ${data.isPublished || 'not set'}</div>`;
+                        html += '</div>';
+                    });
+                }
+                
+                showResults(html);
+            } catch (error) {
+                showResults(`<div class="error">❌ Error: ${error.message}</div>`);
+            }
+        };
+
+        window.searchTest6 = async function() {
+            showResults('<div class="info">🔍 Searching for TEST 6...</div>');
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                
+                let html = '<h2>🔎 Search Results: TEST 6</h2>';
+                let found = false;
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.title && (data.title.toLowerCase().includes('test 6') || data.title.toLowerCase().includes('test6'))) {
+                        found = true;
+                        html += '<div class="success">✅ FOUND TEST 6!</div>';
+                        html += '<div class="quiz-card">';
+                        html += `<h3>📚 ${data.title}</h3>`;
+                        html += `<div class="field"><strong>ID:</strong> ${doc.id}</div>`;
+                        html += `<div class="field"><strong>Published:</strong> ${data.published}</div>`;
+                        html += `<div class="field"><strong>isPublished:</strong> ${data.isPublished}</div>`;
+                        html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                        html += '</div>';
+                    }
+                });
+                
+                if (!found) {
+                    html += '<div class="error">❌ TEST 6 not found in Firebase</div>';
+                }
+                
+                showResults(html);
+            } catch (error) {
+                showResults(`<div class="error">❌ Error: ${error.message}</div>`);
+            }
+        };
+
+        window.searchTest7 = async function() {
+            showResults('<div class="info">🔍 Searching for test 7...</div>');
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                
+                let html = '<h2>🔎 Search Results: test 7</h2>';
+                let found = false;
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.title && (data.title.toLowerCase().includes('test 7') || data.title.toLowerCase().includes('test7'))) {
+                        found = true;
+                        html += '<div class="success">✅ FOUND test 7!</div>';
+                        html += '<div class="quiz-card">';
+                        html += `<h3>📚 ${data.title}</h3>`;
+                        html += `<div class="field"><strong>ID:</strong> ${doc.id}</div>`;
+                        html += `<div class="field"><strong>Published:</strong> ${data.published}</div>`;
+                        html += `<div class="field"><strong>isPublished:</strong> ${data.isPublished}</div>`;
+                        html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                        html += '</div>';
+                    }
+                });
+                
+                if (!found) {
+                    html += '<div class="error">❌ test 7 not found in Firebase</div>';
+                    html += '<p><strong>This is the problem!</strong> The quiz was saved (console showed success) but it\'s not in Firebase.</p>';
+                }
+                
+                showResults(html);
+            } catch (error) {
+                showResults(`<div class="error">❌ Error: ${error.message}</div>`);
+            }
+        };
+
+        window.checkFiltering = async function() {
+            showResults('<div class="info">🔍 Testing query filtering logic...</div>');
+            try {
+                const quizzesRef = collection(db, 'quizzes');
+                const snapshot = await getDocs(quizzesRef);
+                
+                let html = '<h2>🧪 Query Filtering Test</h2>';
+                html += `<div class="info">Total documents: ${snapshot.size}</div>`;
+                
+                let publishedCount = 0;
+                let isPublishedCount = 0;
+                let bothCount = 0;
+                let neitherCount = 0;
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const hasPublished = data.published === true;
+                    const hasIsPublished = data.isPublished === true;
+                    
+                    if (hasPublished) publishedCount++;
+                    if (hasIsPublished) isPublishedCount++;
+                    if (hasPublished && hasIsPublished) bothCount++;
+                    if (!hasPublished && !hasIsPublished) neitherCount++;
+                    
+                    html += '<div class="quiz-card">';
+                    html += `<h4>${data.title || 'Untitled'}</h4>`;
+                    html += `<div class="field">published === true: ${hasPublished ? '✅' : '❌'}</div>`;
+                    html += `<div class="field">isPublished === true: ${hasIsPublished ? '✅' : '❌'}</div>`;
+                    html += `<div class="field">Would pass filter (published OR isPublished): ${hasPublished || hasIsPublished ? '✅ YES' : '❌ NO'}</div>`;
+                    html += '</div>';
+                });
+                
+                html += '<h3>📊 Summary</h3>';
+                html += `<div class="field">published === true: ${publishedCount}</div>`;
+                html += `<div class="field">isPublished === true: ${isPublishedCount}</div>`;
+                html += `<div class="field">Both fields true: ${bothCount}</div>`;
+                html += `<div class="field">Neither field true: ${neitherCount}</div>`;
+                html += `<div class="success">Would show to users: ${Math.max(publishedCount, isPublishedCount)} quizzes</div>`;
+                
+                showResults(html);
+            } catch (error) {
+                showResults(`<div class="error">❌ Error: ${error.message}</div>`);
+            }
+        };
+
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                checkAllQuizzes();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

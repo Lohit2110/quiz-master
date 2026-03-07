@@ -1,32 +1,94 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import { QuizCategory, SavedQuiz } from '../types';
+import { QuizCategory, SavedQuiz, StudentInfo } from '../types';
 import { StorageUtils, QuizUtils } from '../utils/storage';
+import QuizStartCountdown from './QuizStartCountdown';
+import StudentInfoModal from './StudentInfoModal';
+import { cloudSync } from '../services/CloudSyncService';
+import { localFileSystem } from '../services/LocalFileSystemService';
+import { realTimeQuizService } from '../services/RealTimeQuizService';
+import { useAuth } from '../contexts/AuthContext';
+import { useQuizContext } from '../contexts/QuizContext';
 
 const QuizCategories: React.FC = () => {
   const navigate = useNavigate();
+  const { isStudent, isTeacher, getActiveStudentsCount } = useAuth();
+  const { quizzes: savedQuizzes, refreshQuizzes } = useQuizContext();
   const [categories, setCategories] = useState<QuizCategory[]>([]);
-  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [numberOfQuestions, setNumberOfQuestions] = useState<number>(5);
   const [selectionMode, setSelectionMode] = useState<'random' | 'sequential'>('random');
   const [timerMinutes, setTimerMinutes] = useState<number>(10); // Default 10 minutes
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [newQuizAlert, setNewQuizAlert] = useState<boolean>(false);
+
+  // Confirmation modal state
+  const [showStudentInfo, setShowStudentInfo] = useState(false);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
+  const [pendingQuizStart, setPendingQuizStart] = useState<{
+    type: 'category' | 'saved';
+    id: string;
+    customSettings?: boolean;
+    customTimer?: boolean;
+    title: string;
+    questionCount: number;
+    timeLimit?: number;
+  } | null>(null);
 
   useEffect(() => {
     StorageUtils.safeInitialize();
     loadCategories();
-    loadSavedQuizzes();
-  }, []);
+
+    // QuizContext handles Firebase real-time sync automatically
+    console.log('👤 User logged in - QuizContext managing Firebase sync');
+
+    // Trigger initial refresh from QuizContext
+    refreshQuizzes().catch((error) => {
+      console.error('Initial quiz refresh failed:', error);
+    });
+  }, [isStudent]);
 
   const loadCategories = () => {
     const cats = StorageUtils.getCategories();
     setCategories(cats);
   };
 
-  const loadSavedQuizzes = () => {
-    const quizzes = StorageUtils.getSavedQuizzes();
-    setSavedQuizzes(quizzes);
+  // Sync from cloud - QuizContext handles the heavy lifting
+  const syncFromCloud = async () => {
+    try {
+      console.log('🔄 Starting sync process...');
+      setSyncStatus('syncing');
+
+      // Use QuizContext to refresh from Firebase
+      await refreshQuizzes();
+
+      console.log(`✅ Sync successful: ${savedQuizzes.length} quizzes`);
+      setSyncStatus('success');
+      setLastSyncTime(new Date());
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    } catch (error) {
+      console.error('❌ Error syncing:', error);
+      try {
+        if (savedQuizzes.length > 0) {
+          console.log(`📦 Using ${savedQuizzes.length} quizzes from context as fallback`);
+          setSyncStatus('success');
+        } else {
+          setSyncStatus('error');
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+        setSyncStatus('error');
+      }
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  };
+
+  // Manual refresh for students
+  const handleManualRefresh = () => {
+    syncFromCloud();
   };
 
   const checkForUnmatchedQuestions = () => {
@@ -45,48 +107,105 @@ const QuizCategories: React.FC = () => {
         createdAt: Date.now(),
         description: `Quiz converted from ${unmatchedQuestions.length} unmatched questions`
       };
-      
+
       StorageUtils.addSavedQuiz(newQuiz);
-      
+
       // Remove converted questions from individual storage
       const questions = StorageUtils.getQuestions();
       const predefinedCategories = ['general-knowledge', 'science', 'history', 'sports'];
       const remainingQuestions = questions.filter(q => predefinedCategories.includes(q.category));
       StorageUtils.saveQuestions(remainingQuestions);
-      
-      loadSavedQuizzes(); // Reload to show the new quiz
+
+      // Refresh quizzes from Firebase/Context
+      refreshQuizzes().catch((error) => console.error('Failed to refresh quizzes:', error));
       alert(`Converted ${unmatchedQuestions.length} questions to a saved quiz!`);
     }
   };
 
   const handleStartQuiz = (categoryId: string, customSettings?: boolean) => {
-    if (customSettings) {
-      // Navigate to quiz with custom settings
-      const params = new URLSearchParams({
-        category: categoryId,
-        questions: numberOfQuestions.toString(),
-        mode: selectionMode,
-        timer: timerMinutes.toString()
-      });
-      navigate(`/quiz?${params.toString()}`);
-    } else {
-      // Start full quiz with default timer
-      const params = new URLSearchParams({
-        category: categoryId,
-        mode: 'random',
-        timer: timerMinutes.toString()
-      });
-      navigate(`/quiz?${params.toString()}`);
-    }
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category) return;
+
+    const questionCount = customSettings ? numberOfQuestions : category.questionCount;
+    const timeLimit = customSettings ? timerMinutes : 10;
+
+    // Show student info modal first
+    setPendingQuizStart({
+      type: 'category',
+      id: categoryId,
+      customSettings,
+      title: category.name,
+      questionCount,
+      timeLimit
+    });
+    setShowStudentInfo(true);
   };
 
   const handleStartSavedQuiz = (quizId: string, customTimer?: boolean) => {
-    // Navigate to quiz with saved quiz ID
-    const params = new URLSearchParams({
-      savedQuiz: quizId,
-      timer: customTimer ? timerMinutes.toString() : '10' // Default 10 minutes for saved quizzes
+    // Get the saved quiz to check for default timer
+    const savedQuiz = savedQuizzes.find(quiz => quiz.id === quizId);
+    if (!savedQuiz) return;
+
+    const defaultTimer = savedQuiz.defaultTimerMinutes || 10;
+    const timeLimit = customTimer ? timerMinutes : defaultTimer;
+
+    // Show student info modal first
+    setPendingQuizStart({
+      type: 'saved',
+      id: quizId,
+      customTimer,
+      title: savedQuiz.title,
+      questionCount: savedQuiz.questions.length,
+      timeLimit
     });
-    navigate(`/quiz?${params.toString()}`);
+    setShowStudentInfo(true);
+  };
+
+  const handleStudentInfoSubmit = (info: StudentInfo) => {
+    setStudentInfo(info);
+    setShowStudentInfo(false);
+    setShowCountdown(true);
+  };
+
+  const handleStudentInfoCancel = () => {
+    setShowStudentInfo(false);
+    setPendingQuizStart(null);
+    setStudentInfo(null);
+  };
+
+  const handleCountdownConfirm = () => {
+    if (!pendingQuizStart || !studentInfo) return;
+
+    // Store student info in session storage for the quiz
+    sessionStorage.setItem('current_student_info', JSON.stringify(studentInfo));
+
+    if (pendingQuizStart.type === 'category') {
+      // Navigate to category quiz
+      const params = new URLSearchParams({
+        category: pendingQuizStart.id,
+        questions: pendingQuizStart.questionCount.toString(),
+        timer: pendingQuizStart.timeLimit!.toString(),
+        mode: selectionMode
+      });
+      navigate(`/quiz?${params.toString()}`);
+    } else {
+      // Navigate to saved quiz
+      const params = new URLSearchParams({
+        savedQuiz: pendingQuizStart.id,
+        timer: pendingQuizStart.timeLimit!.toString()
+      });
+      navigate(`/quiz?${params.toString()}`);
+    }
+
+    setShowCountdown(false);
+    setPendingQuizStart(null);
+    setStudentInfo(null);
+  };
+
+  const handleCountdownCancel = () => {
+    setShowCountdown(false);
+    setPendingQuizStart(null);
+    setStudentInfo(null);
   };
 
   const getQuestionCountForCategory = (categoryId: string): number => {
@@ -119,11 +238,11 @@ const QuizCategories: React.FC = () => {
                   Found {checkForUnmatchedQuestions().length} Unmatched Questions
                 </h5>
                 <p className="mb-3">
-                  We found questions that were created with the old system. 
+                  We found questions that were created with the old system.
                   Would you like to convert them to a saved quiz?
                 </p>
-                <Button 
-                  variant="warning" 
+                <Button
+                  variant="warning"
                   onClick={convertUnmatchedQuestions}
                   className="me-2"
                 >
@@ -139,18 +258,106 @@ const QuizCategories: React.FC = () => {
         </Row>
       )}
 
+      {/* No Quizzes Message for Students on Mobile */}
+      {isStudent && savedQuizzes.length === 0 && (
+        <Row className="mb-4">
+          <Col>
+            <Alert variant="info" className="text-center">
+              <i className="fas fa-info-circle fa-2x mb-3"></i>
+              <h5 className="fw-bold">No Quizzes Available Yet</h5>
+              <p className="mb-3">
+                Your teacher hasn't published any quizzes yet, or they may not have synced to your device.
+              </p>
+              <Button
+                variant="primary"
+                onClick={handleManualRefresh}
+                disabled={syncStatus === 'syncing'}
+                size="lg"
+              >
+                {syncStatus === 'syncing' ? (
+                  <>
+                    <Spinner size="sm" className="me-2" />
+                    Checking for Quizzes...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-sync-alt me-2"></i>
+                    Check for Available Quizzes
+                  </>
+                )}
+              </Button>
+              <div className="mt-3">
+                <small className="text-muted">
+                  <i className="fas fa-lightbulb me-1"></i>
+                  Tip: Make sure you're connected to the internet and your teacher has published quizzes.
+                </small>
+              </div>
+            </Alert>
+          </Col>
+        </Row>
+      )}
+
       {/* Saved Quizzes Section */}
       {savedQuizzes.length > 0 && (
         <>
           <Row className="mb-4">
             <Col>
-              <h3 className="fw-bold text-primary">
-                <i className="fas fa-bookmark me-2"></i>
-                Your Saved Quizzes
-              </h3>
-              <p className="text-muted">Take your custom created quizzes</p>
+              <div className="d-flex justify-content-between align-items-center flex-wrap">
+                <div className="mb-2 mb-md-0">
+                  <h3 className="fw-bold text-primary">
+                    <i className="fas fa-bookmark me-2"></i>
+                    Your Saved Quizzes ({savedQuizzes.length})
+                  </h3>
+                  <p className="text-muted mb-0">Take your custom created quizzes</p>
+                </div>
+
+                {/* Sync Status for Students */}
+                {isStudent && (
+                  <div className="d-flex align-items-center gap-3">
+                    {syncStatus === 'syncing' && (
+                      <div className="text-primary">
+                        <Spinner size="sm" className="me-2" />
+                        Syncing...
+                      </div>
+                    )}
+                    {syncStatus === 'success' && (
+                      <small className="text-success">
+                        <i className="fas fa-check-circle me-1"></i>
+                        Last synced: {lastSyncTime?.toLocaleTimeString()}
+                      </small>
+                    )}
+                    {syncStatus === 'error' && (
+                      <small className="text-danger">
+                        <i className="fas fa-exclamation-triangle me-1"></i>
+                        Sync failed
+                      </small>
+                    )}
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={handleManualRefresh}
+                      disabled={syncStatus === 'syncing'}
+                    >
+                      <i className="fas fa-sync-alt me-1"></i>
+                      Refresh
+                    </Button>
+                  </div>
+                )}
+              </div>
             </Col>
           </Row>
+
+          {/* Auto-sync notification for students */}
+          {isStudent && syncStatus === 'success' && (
+            <Row className="mb-3">
+              <Col>
+                <Alert variant="success" className="py-2">
+                  <i className="fas fa-cloud-download-alt me-2"></i>
+                  <strong>Quizzes Updated!</strong> You now have access to the latest quizzes from your teacher.
+                </Alert>
+              </Col>
+            </Row>
+          )}
 
           <Row className="g-4 mb-5">
             {savedQuizzes.map((quiz) => (
@@ -169,9 +376,42 @@ const QuizCategories: React.FC = () => {
                       </small>
                       <br />
                       <small className="text-secondary">
+                        <i className="fas fa-clock me-1"></i>
+                        Default timer: {quiz.defaultTimerMinutes || 10} minutes
+                      </small>
+                      <br />
+                      <small className="text-secondary">
                         <i className="fas fa-calendar me-1"></i>
                         Created: {new Date(quiz.createdAt).toLocaleDateString()}
                       </small>
+                      {quiz.subject && (
+                        <>
+                          <br />
+                          <small className="text-secondary">
+                            <i className="fas fa-book me-1"></i>
+                            Subject: <strong>{quiz.subject}</strong>
+                          </small>
+                        </>
+                      )}
+                      {quiz.chapters && quiz.chapters.length > 0 && (
+                        <div className="mt-2">
+                          <small className="text-secondary d-block mb-1">
+                            <i className="fas fa-bookmark me-1"></i>
+                            Chapters:
+                          </small>
+                          <div className="d-flex flex-wrap gap-1">
+                            {quiz.chapters.map((ch, idx) => (
+                              <span
+                                key={idx}
+                                className="badge"
+                                style={{ backgroundColor: '#e8f4fd', color: '#0d6efd', fontSize: '0.72rem', fontWeight: 500 }}
+                              >
+                                {ch}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-auto">
@@ -179,28 +419,31 @@ const QuizCategories: React.FC = () => {
                         <Button
                           variant="success"
                           onClick={() => handleStartSavedQuiz(quiz.id, false)}
-                          className="flex-fill"
+                          className={isTeacher ? "flex-fill" : "w-100"}
                         >
                           <i className="fas fa-play me-2"></i>
-                          Take Quiz (10min)
+                          Take Quiz ({quiz.defaultTimerMinutes || 10}min)
                         </Button>
-                        <Button
-                          variant="outline-success"
-                          onClick={() => setSelectedCategory(
-                            selectedCategory === `saved-${quiz.id}` ? '' : `saved-${quiz.id}`
-                          )}
-                        >
-                          <i className="fas fa-cog"></i>
-                        </Button>
+                        {/* Settings button - Admin only */}
+                        {isTeacher && (
+                          <Button
+                            variant="outline-success"
+                            onClick={() => setSelectedCategory(
+                              selectedCategory === `saved-${quiz.id}` ? '' : `saved-${quiz.id}`
+                            )}
+                          >
+                            <i className="fas fa-cog"></i>
+                          </Button>
+                        )}
                       </div>
 
-                      {/* Custom Timer Settings for Saved Quiz */}
-                      {selectedCategory === `saved-${quiz.id}` && (
+                      {/* Custom Timer Settings for Saved Quiz - ADMIN ONLY */}
+                      {selectedCategory === `saved-${quiz.id}` && isTeacher && (
                         <Card className="bg-light border-0">
                           <Card.Body className="p-3">
                             <h6 className="fw-bold mb-3">
                               <i className="fas fa-clock me-2"></i>
-                              Timer Settings
+                              Timer Settings (Admin Only)
                             </h6>
 
                             <Form>
@@ -282,28 +525,31 @@ const QuizCategories: React.FC = () => {
                         <Button
                           variant="primary"
                           onClick={() => handleStartQuiz(category.id, false)}
-                          className="flex-fill"
+                          className={isTeacher ? "flex-fill" : "w-100"}
                         >
                           <i className="fas fa-play me-2"></i>
                           Start Full Quiz
                         </Button>
-                        <Button
-                          variant="outline-primary"
-                          onClick={() => setSelectedCategory(
-                            selectedCategory === category.id ? '' : category.id
-                          )}
-                        >
-                          <i className="fas fa-cog"></i>
-                        </Button>
+                        {/* Settings button - Admin only */}
+                        {isTeacher && (
+                          <Button
+                            variant="outline-primary"
+                            onClick={() => setSelectedCategory(
+                              selectedCategory === category.id ? '' : category.id
+                            )}
+                          >
+                            <i className="fas fa-cog"></i>
+                          </Button>
+                        )}
                       </div>
 
-                      {/* Custom Quiz Settings */}
-                      {selectedCategory === category.id && (
+                      {/* Custom Quiz Settings - ADMIN ONLY */}
+                      {selectedCategory === category.id && isTeacher && (
                         <Card className="bg-light border-0">
                           <Card.Body className="p-3">
                             <h6 className="fw-bold mb-3">
                               <i className="fas fa-sliders-h me-2"></i>
-                              Custom Quiz Settings
+                              Custom Quiz Settings (Admin Only)
                             </h6>
 
                             <Form>
@@ -406,10 +652,12 @@ const QuizCategories: React.FC = () => {
               <i className="fas fa-folder-open fa-3x mb-3"></i>
               <h4>No Categories Available</h4>
               <p>Create some quiz categories to get started!</p>
-              <Button variant="primary" href="/admin">
-                <i className="fas fa-plus me-2"></i>
-                Go to Admin Panel
-              </Button>
+              {isTeacher && (
+                <Button variant="primary" href="/admin">
+                  <i className="fas fa-plus me-2"></i>
+                  Go to Admin Panel
+                </Button>
+              )}
             </div>
           </Col>
         </Row>
@@ -429,7 +677,7 @@ const QuizCategories: React.FC = () => {
             <Col md={4}>
               <div className="stat-item">
                 <h6 className="fw-bold text-success">
-                  {categories.reduce((total, cat) => 
+                  {categories.reduce((total, cat) =>
                     total + getQuestionCountForCategory(cat.id), 0
                   )}
                 </h6>
@@ -439,7 +687,7 @@ const QuizCategories: React.FC = () => {
             <Col md={4}>
               <div className="stat-item">
                 <h6 className="fw-bold text-info">
-                  {categories.filter(cat => 
+                  {categories.filter(cat =>
                     getQuestionCountForCategory(cat.id) > 0
                   ).length}
                 </h6>
@@ -449,6 +697,23 @@ const QuizCategories: React.FC = () => {
           </Row>
         </Col>
       </Row>
+
+      {/* Student Info Modal */}
+      <StudentInfoModal
+        show={showStudentInfo}
+        onSubmit={handleStudentInfoSubmit}
+        onCancel={handleStudentInfoCancel}
+      />
+
+      {/* Quiz Start Countdown Modal */}
+      <QuizStartCountdown
+        show={showCountdown}
+        quizTitle={pendingQuizStart?.title || ''}
+        questionCount={pendingQuizStart?.questionCount || 0}
+        studentInfo={studentInfo}
+        onConfirm={handleCountdownConfirm}
+        onCancel={handleCountdownCancel}
+      />
     </Container>
   );
 };
