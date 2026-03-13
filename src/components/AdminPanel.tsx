@@ -363,8 +363,8 @@ const AdminPanelContent: React.FC = () => {
   const togglePublishQuiz = async (quizId: string, quizTitle: string, currentPublishState: boolean) => {
     const action = currentPublishState ? 'unpublish' : 'publish';
     const confirmMessage = currentPublishState
-      ? `Unpublish "${quizTitle}"? Students won't be able to see or take this quiz.`
-      : `Publish "${quizTitle}"? Students will be able to see and take this quiz.`;
+      ? `Unpublish "${quizTitle}"? Students won't be able to see or take this quiz. Original question order will be restored.`
+      : `Publish "${quizTitle}"? Questions will be shuffled for students. Your admin view will keep the original order.`;
 
     if (window.confirm(confirmMessage)) {
       try {

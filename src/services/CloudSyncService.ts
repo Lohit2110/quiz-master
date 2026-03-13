@@ -1,14 +1,14 @@
 // Firebase Cloud Sync Service - Real-time data synchronization
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
   serverTimestamp,
   where,
   addDoc,
@@ -17,9 +17,9 @@ import {
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../config/firebase';
 import { QuizQuestion, SavedQuiz, QuizResult, StudentInfo } from '../types';
-import { 
-  ensureQuizWithinLimit, 
-  calculateQuizSizeKB, 
+import {
+  ensureQuizWithinLimit,
+  calculateQuizSizeKB,
   getHumanReadableSize,
   calculateQuizSize
 } from '../utils/imageCompression';
@@ -77,7 +77,7 @@ export class CloudSyncService {
   async saveQuiz(quiz: SavedQuiz, userId: string): Promise<{ success: boolean; firebaseId?: string; message: string }> {
     try {
       this.syncInProgress = true;
-      
+
       const firebaseQuiz: FirebaseQuiz = {
         ...quiz,
         createdBy: userId,
@@ -97,7 +97,7 @@ export class CloudSyncService {
       }
 
       console.log('✅ Quiz saved to Firebase:', docRef.id);
-      
+
       return {
         success: true,
         firebaseId: docRef.id,
@@ -120,18 +120,86 @@ export class CloudSyncService {
       // Remove 'firebase_' prefix if present
       const firebaseId = quizId.startsWith('firebase_') ? quizId.replace('firebase_', '') : quizId;
       const docRef = doc(db, COLLECTIONS.QUIZZES, firebaseId);
-      
-      await updateDoc(docRef, {
-        published: shouldPublish,
-        publishedAt: shouldPublish ? serverTimestamp() : null,
-        lastModified: serverTimestamp()
-      });
+
+      if (shouldPublish) {
+        // PUBLISHING: Read the quiz, shuffle questions, save shuffled order
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          return { success: false, message: 'Quiz not found in Firebase' };
+        }
+
+        const quizData = docSnap.data();
+        const questions = quizData.questions || [];
+
+        // Store original order as array of question IDs (lightweight)
+        const originalQuestionOrder = questions.map((q: any) => q.id);
+
+        // Fisher-Yates shuffle on a copy
+        const shuffledQuestions = [...questions];
+        for (let i = shuffledQuestions.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledQuestions[i], shuffledQuestions[j]] = [shuffledQuestions[j], shuffledQuestions[i]];
+        }
+
+        console.log('🔀 Questions shuffled for publishing. Original order saved.');
+        console.log(`📊 Total questions: ${shuffledQuestions.length}`);
+
+        await updateDoc(docRef, {
+          questions: shuffledQuestions,
+          originalQuestionOrder: originalQuestionOrder,
+          published: true,
+          publishedAt: serverTimestamp(),
+          lastModified: serverTimestamp()
+        });
+      } else {
+        // UNPUBLISHING: Restore original question order if available
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const quizData = docSnap.data();
+          const originalOrder: string[] = quizData.originalQuestionOrder || [];
+          const questions = quizData.questions || [];
+
+          if (originalOrder.length > 0 && questions.length > 0) {
+            // Restore original order by sorting questions based on originalQuestionOrder
+            const questionMap = new Map(questions.map((q: any) => [q.id, q]));
+            const restoredQuestions = originalOrder
+              .map((id: string) => questionMap.get(id))
+              .filter((q: any) => q !== undefined);
+
+            // If some questions were added/removed, append any that weren't in the original order
+            const restoredIds = new Set(originalOrder);
+            const extraQuestions = questions.filter((q: any) => !restoredIds.has(q.id));
+            const finalQuestions = [...restoredQuestions, ...extraQuestions];
+
+            console.log('🔄 Restoring original question order on unpublish');
+
+            await updateDoc(docRef, {
+              questions: finalQuestions,
+              published: false,
+              publishedAt: null,
+              lastModified: serverTimestamp()
+            });
+          } else {
+            await updateDoc(docRef, {
+              published: false,
+              publishedAt: null,
+              lastModified: serverTimestamp()
+            });
+          }
+        } else {
+          await updateDoc(docRef, {
+            published: false,
+            publishedAt: null,
+            lastModified: serverTimestamp()
+          });
+        }
+      }
 
       console.log(`✅ Quiz ${shouldPublish ? 'published' : 'unpublished'} successfully:`, firebaseId);
-      
+
       return {
         success: true,
-        message: `Quiz ${shouldPublish ? 'published' : 'unpublished'} successfully`
+        message: `Quiz ${shouldPublish ? 'published (questions shuffled!)' : 'unpublished (original order restored)'} successfully`
       };
     } catch (error) {
       console.error('❌ Error toggling publish status:', error);
@@ -146,7 +214,7 @@ export class CloudSyncService {
   async getAllQuizzes(userId?: string): Promise<FirebaseQuiz[]> {
     try {
       let q = query(
-        collection(db, COLLECTIONS.QUIZZES), 
+        collection(db, COLLECTIONS.QUIZZES),
         orderBy('lastModified', 'desc')
       );
 
@@ -186,13 +254,13 @@ export class CloudSyncService {
 
       const snapshot = await getDocs(q);
       console.log('📦 Firebase returned', snapshot.docs.length, 'published documents');
-      
+
       const quizzes: SavedQuiz[] = [];
-      
+
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         console.log('📄 Processing quiz:', data.title, 'ID:', docSnap.id, 'Published:', data.published);
-        
+
         // Check if quiz uses subcollections (new format for unlimited questions)
         if (data.usesSubcollections) {
           console.log('🔄 Loading quiz with subcollections:', data.title);
@@ -237,7 +305,7 @@ export class CloudSyncService {
     try {
       const firebaseId = quizId.replace('firebase_', '');
       const docRef = doc(db, COLLECTIONS.QUIZZES, firebaseId);
-      
+
       await updateDoc(docRef, {
         published: true,
         publishedAt: serverTimestamp(),
@@ -245,7 +313,7 @@ export class CloudSyncService {
       });
 
       console.log('📢 Quiz published successfully:', quizId);
-      
+
       return {
         success: true,
         message: 'Quiz published successfully'
@@ -264,7 +332,7 @@ export class CloudSyncService {
     try {
       const firebaseId = quizId.replace('firebase_', '');
       const docRef = doc(db, COLLECTIONS.QUIZZES, firebaseId);
-      
+
       await updateDoc(docRef, {
         published: false,
         publishedAt: null,
@@ -272,7 +340,7 @@ export class CloudSyncService {
       });
 
       console.log('🔒 Quiz unpublished:', quizId);
-      
+
       return {
         success: true,
         message: 'Quiz unpublished successfully'
@@ -291,9 +359,9 @@ export class CloudSyncService {
     try {
       const firebaseId = quizId.replace('firebase_', '');
       await deleteDoc(doc(db, COLLECTIONS.QUIZZES, firebaseId));
-      
+
       console.log('🗑️ Quiz deleted from Firebase:', quizId);
-      
+
       return {
         success: true,
         message: 'Quiz deleted successfully'
@@ -313,67 +381,67 @@ export class CloudSyncService {
   async saveQuizToCloud(quiz: SavedQuiz, classroomId: string = 'default'): Promise<boolean> {
     try {
       console.log('🔥 Saving quiz to Firebase:', quiz.title, 'ID:', quiz.id);
-      
+
       // Check quiz size BEFORE compression
       const originalSize = calculateQuizSize(quiz);
       const originalSizeKB = calculateQuizSizeKB(quiz);
       console.log(`� Original quiz size: ${getHumanReadableSize(originalSize)} (${originalSizeKB.toFixed(2)} KB)`);
-      
+
       // Compress images if quiz is too large (optimized for 50 images)
       const compressionResult = await ensureQuizWithinLimit(quiz);
       const processedQuiz = compressionResult.quiz;
-      
+
       if (compressionResult.compressed) {
         console.log(`✨ Images compressed (optimized for 50 images per quiz)!`);
         console.log(`📉 Size reduced by ${getHumanReadableSize(compressionResult.originalSize - compressionResult.finalSize)}`);
-        
+
         // Show user-friendly message
         if (compressionResult.withinLimit) {
           alert(`✅ Quiz saved successfully!\n\n` +
-                `Original: ${getHumanReadableSize(compressionResult.originalSize)}\n` +
-                `Optimized: ${getHumanReadableSize(compressionResult.finalSize)}\n\n` +
-                `✨ Images compressed with 75% quality\n` +
-                `📸 Supports up to 50 images per quiz\n` +
-                `✓ Text and diagrams remain clear and readable`);
+            `Original: ${getHumanReadableSize(compressionResult.originalSize)}\n` +
+            `Optimized: ${getHumanReadableSize(compressionResult.finalSize)}\n\n` +
+            `✨ Images compressed with 75% quality\n` +
+            `📸 Supports up to 50 images per quiz\n` +
+            `✓ Text and diagrams remain clear and readable`);
         } else {
           alert(`⚠️ Quiz exceeds 1 MB limit even after compression!\n\n` +
-                `Current size: ${getHumanReadableSize(compressionResult.finalSize)}\n\n` +
-                `Please:\n` +
-                `• Reduce number of images (max 50 recommended)\n` +
-                `• Split into multiple quizzes\n` +
-                `• Use smaller/simpler images\n\n` +
-                `Quiz saved locally only.`);
+            `Current size: ${getHumanReadableSize(compressionResult.finalSize)}\n\n` +
+            `Please:\n` +
+            `• Reduce number of images (max 50 recommended)\n` +
+            `• Split into multiple quizzes\n` +
+            `• Use smaller/simpler images\n\n` +
+            `Quiz saved locally only.`);
           console.error('❌ Quiz exceeds Firebase size limit even after compression');
           return false;
         }
       }
-      
+
       // Final size check
       if (!compressionResult.withinLimit) {
         const finalSize = calculateQuizSize(processedQuiz);
         alert(`❌ Cannot save quiz to Firebase: Size limit exceeded!\n\n` +
-              `Quiz size: ${getHumanReadableSize(finalSize)}\n` +
-              `Firebase limit: 1 MB (1,048,576 bytes)\n\n` +
-              `Please:\n` +
-              `• Use fewer images\n` +
-              `• Use smaller images\n` +
-              `• Reduce image quality\n\n` +
-              `Quiz saved locally only.`);
+          `Quiz size: ${getHumanReadableSize(finalSize)}\n` +
+          `Firebase limit: 1 MB (1,048,576 bytes)\n\n` +
+          `Please:\n` +
+          `• Use fewer images\n` +
+          `• Use smaller images\n` +
+          `• Reduce image quality\n\n` +
+          `Quiz saved locally only.`);
         return false;
       }
-      
+
       console.log('🔑 Firebase collection:', COLLECTIONS.QUIZZES);
       console.log('🌐 Firebase db initialized:', db ? 'YES' : 'NO');
-      
+
       const quizDoc = doc(db, COLLECTIONS.QUIZZES, processedQuiz.id);
       console.log('📄 Document reference created for:', processedQuiz.id);
-      
+
       const dataToSave = {
         ...processedQuiz,
         publishedAt: Timestamp.now(),
         published: true
       };
-      
+
       await setDoc(quizDoc, dataToSave);
       console.log('✅ Quiz saved to Firebase successfully:', processedQuiz.title);
       console.log('🎉 You can verify in Firebase Console: https://console.firebase.google.com/project/quiz-web-app-109af/firestore/data/quizzes/' + processedQuiz.id);
@@ -386,16 +454,16 @@ export class CloudSyncService {
       console.error('🔴 Error message:', (error as any).message);
       console.error('🔴 Error code:', (error as any).code);
       console.error('🔴 Full error:', error);
-      
+
       // Better error message for size limit
       if ((error as any).message?.includes('maximum allowed size')) {
         alert('❌ Quiz is too large for Firebase!\n\n' +
-              'The quiz has too many or too large images.\n\n' +
-              'Solutions:\n' +
-              '• Use fewer images\n' +
-              '• Use smaller image files\n' +
-              '• Compress images before uploading\n\n' +
-              'Quiz saved locally only.');
+          'The quiz has too many or too large images.\n\n' +
+          'Solutions:\n' +
+          '• Use fewer images\n' +
+          '• Use smaller image files\n' +
+          '• Compress images before uploading\n\n' +
+          'Quiz saved locally only.');
       } else {
         alert('❌ CRITICAL: Failed to save quiz to Firebase!\n\nError: ' + (error as any).message + '\n\nQuiz saved locally only. Please check console for details.');
       }
@@ -430,9 +498,9 @@ export class CloudSyncService {
       };
 
       await setDoc(doc(db, COLLECTIONS.USERS, userId), firebaseUser, { merge: true });
-      
+
       console.log('✅ User saved to Firebase:', user.id);
-      
+
       return {
         success: true,
         message: 'User profile saved'
@@ -451,7 +519,7 @@ export class CloudSyncService {
     try {
       const docRef = doc(db, COLLECTIONS.USERS, userId);
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists()) {
         return { id: docSnap.id, ...docSnap.data() } as FirebaseUser;
       } else {
@@ -475,9 +543,9 @@ export class CloudSyncService {
       };
 
       await addDoc(collection(db, COLLECTIONS.ATTEMPTS), attemptData);
-      
+
       console.log('✅ Quiz attempt saved to Firebase');
-      
+
       return {
         success: true,
         message: 'Quiz attempt saved'
@@ -498,16 +566,16 @@ export class CloudSyncService {
       console.log('📊 Result data:', result);
       console.log('🎯 Collection:', COLLECTIONS.ATTEMPTS);
       console.log('🔑 Document ID:', result.sessionId);
-      
+
       const resultDoc = doc(db, COLLECTIONS.ATTEMPTS, result.sessionId);
       const dataToSave = {
         ...result,
         submittedAt: Timestamp.now()
       };
-      
+
       console.log('📝 Data to save:', dataToSave);
       await setDoc(resultDoc, dataToSave);
-      
+
       console.log('✅ Student result saved to cloud successfully!');
       return true;
     } catch (error) {
@@ -568,22 +636,22 @@ export class CloudSyncService {
     try {
       console.log('🔍 Fetching student results from Firebase collection:', COLLECTIONS.ATTEMPTS);
       const resultsRef = collection(db, COLLECTIONS.ATTEMPTS);
-      
+
       // Try without orderBy first (to avoid index issues)
       const snapshot = await getDocs(resultsRef);
       console.log('📦 Firebase snapshot received, doc count:', snapshot.size);
-      
+
       const results: QuizResult[] = [];
       snapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
         console.log('📄 Processing document:', docSnapshot.id);
         console.log('📄 Raw data:', JSON.stringify(data, null, 2));
-        
+
         // Convert timestamp properly
         const completedAt = this.convertTimestamp(data.completedAt);
-        
+
         console.log('📄 Converted completedAt:', completedAt, 'from:', data.completedAt);
-        
+
         results.push({
           sessionId: data.sessionId || docSnapshot.id,
           categoryName: data.categoryName || 'Unknown',
@@ -603,10 +671,10 @@ export class CloudSyncService {
           detailedResults: data.detailedResults || []
         });
       });
-      
+
       // Sort by completedAt descending (most recent first)
       results.sort((a, b) => b.completedAt - a.completedAt);
-      
+
       console.log('✅ Fetched student results from cloud:', results.length);
       if (results.length > 0) {
         console.log('📊 First result:', results[0].studentName, '-', results[0].quizTitle);
@@ -646,15 +714,15 @@ export class CloudSyncService {
       console.log('🗑️ Clearing all student results from Firebase...');
       const resultsRef = collection(db, COLLECTIONS.ATTEMPTS);
       const snapshot = await getDocs(resultsRef);
-      
+
       let deletedCount = 0;
       const deletePromises = snapshot.docs.map(async (docSnapshot) => {
         await deleteDoc(docSnapshot.ref);
         deletedCount++;
       });
-      
+
       await Promise.all(deletePromises);
-      
+
       console.log(`✅ Deleted ${deletedCount} student results from Firebase`);
       return {
         success: true,
@@ -746,15 +814,15 @@ export class CloudSyncService {
   // Listen to student results changes (for real-time updates)
   onStudentResultsChange(callback: (results: QuizResult[]) => void): () => void {
     const resultsRef = collection(db, COLLECTIONS.ATTEMPTS);
-    
+
     const unsubscribe = onSnapshot(resultsRef, (snapshot) => {
       const results: QuizResult[] = [];
       snapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
-        
+
         // Convert timestamp properly using helper
         const completedAt = this.convertTimestamp(data.completedAt);
-        
+
         results.push({
           sessionId: data.sessionId || docSnapshot.id,
           categoryName: data.categoryName || 'Unknown',
@@ -800,11 +868,11 @@ export class CloudSyncService {
       const quizzesRef = collection(db, COLLECTIONS.QUIZZES);
       // NO filter - admin sees all quizzes (published AND drafts)
       const q = query(quizzesRef);
-      
+
       const unsubscribe = onSnapshot(q, async (snapshot) => {
         console.log(`📦 [ADMIN] Real-time snapshot received: ${snapshot.size} total documents`);
         const quizzes: SavedQuiz[] = [];
-        
+
         for (const docSnap of snapshot.docs) {
           const data = docSnap.data();
           // Check if quiz uses subcollections (new format for unlimited questions)
@@ -821,21 +889,35 @@ export class CloudSyncService {
             }
           } else {
             // Old format - questions stored directly in document
+            let quizQuestions = data.questions || [];
+
+            // For admin: restore original question order if quiz is published (questions are shuffled in Firebase)
+            if (data.published && data.originalQuestionOrder && data.originalQuestionOrder.length > 0) {
+              const questionMap = new Map(quizQuestions.map((q: any) => [q.id, q]));
+              const restored = data.originalQuestionOrder
+                .map((id: string) => questionMap.get(id))
+                .filter((q: any) => q !== undefined);
+              // Append any extra questions not in original order
+              const restoredIds = new Set(data.originalQuestionOrder);
+              const extras = quizQuestions.filter((q: any) => !restoredIds.has(q.id));
+              quizQuestions = [...restored, ...extras];
+            }
+
             quizzes.push({
               id: data.id || docSnap.id,
               title: data.title,
               description: data.description,
-              questions: data.questions,
+              questions: quizQuestions,
               createdAt: data.createdAt,
               defaultTimerMinutes: data.defaultTimerMinutes,
               published: data.published
             });
           }
         }
-        
+
         // Sort by createdAt descending (newest first)
         quizzes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        
+
         console.log('✅ [ADMIN] Real-time update:', quizzes.length, 'total quizzes');
         console.log('📋 Published:', quizzes.filter(q => q.published).length, '| Drafts:', quizzes.filter(q => !q.published).length);
         callback(quizzes);
@@ -848,13 +930,13 @@ export class CloudSyncService {
       return unsubscribe;
     } catch (error) {
       console.error('❌ [ADMIN] Error subscribing to quiz updates:', error);
-      return () => {};
+      return () => { };
     }
   }
 
   // Listen for real-time quiz updates (for students - published only)
   subscribeToQuizUpdates(
-    callback: (quizzes: SavedQuiz[]) => void, 
+    callback: (quizzes: SavedQuiz[]) => void,
     classroomId: string = 'default'
   ): () => void {
     try {
@@ -862,11 +944,11 @@ export class CloudSyncService {
       const quizzesRef = collection(db, COLLECTIONS.QUIZZES);
       // ✅ FIXED: Proper Firestore query filter (more efficient)
       const q = query(quizzesRef, where('published', '==', true));
-      
+
       const unsubscribe = onSnapshot(q, async (snapshot) => {
         console.log(`📦 Real-time snapshot received: ${snapshot.size} published documents`);
         const quizzes: SavedQuiz[] = [];
-        
+
         for (const docSnap of snapshot.docs) {
           const data = docSnap.data();
           // All documents are already published due to query filter
@@ -897,10 +979,10 @@ export class CloudSyncService {
             });
           }
         }
-        
+
         // Sort by createdAt descending (newest first) in memory
         quizzes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        
+
         console.log('✅ Real-time quiz update:', quizzes.length, 'published quizzes');
         console.log('📋 Quiz titles:', quizzes.map(q => q.title));
         callback(quizzes);
@@ -913,7 +995,7 @@ export class CloudSyncService {
       return unsubscribe;
     } catch (error) {
       console.error('❌ Error subscribing to quiz updates:', error);
-      return () => {};
+      return () => { };
     }
   }
 
@@ -938,12 +1020,12 @@ export class CloudSyncService {
     try {
       // Get local saved quizzes
       const localQuizzes = JSON.parse(localStorage.getItem('quiz_master_saved_quizzes') || '[]');
-      
+
       // Upload each quiz to cloud
       for (const quiz of localQuizzes) {
         await this.saveQuizToCloud(quiz, classroomId);
       }
-      
+
       console.log('Local data synced to cloud');
       return true;
     } catch (error) {
@@ -957,14 +1039,14 @@ export class CloudSyncService {
     try {
       console.log('🔍 Fetching quizzes from Firebase...');
       const cloudQuizzes = await this.getPublishedQuizzes(classroomId);
-      
+
       console.log(`📊 Firebase returned ${cloudQuizzes.length} published quizzes`);
       console.log(`📋 Quiz titles:`, cloudQuizzes.map(q => q.title));
-      
+
       // ✅ DON'T save to localStorage at all - it causes QuotaExceeded errors
       // Quizzes are kept in React state and fetched from Firebase on page load
       console.log('✅ Cloud sync complete - quizzes available in React state (not stored locally)');
-      
+
       return true;
     } catch (error) {
       console.error('❌ Error syncing cloud data to local:', error);
@@ -1014,7 +1096,7 @@ export class CloudSyncService {
   private hasFirebaseStorageImages(quiz: SavedQuiz): boolean {
     // Check if any images are Firebase Storage URLs instead of base64
     const allImages: string[] = [];
-    
+
     // Collect all image URLs from questions
     quiz.questions?.forEach(question => {
       if (question.imageUrl) allImages.push(question.imageUrl);
@@ -1026,7 +1108,7 @@ export class CloudSyncService {
         });
       }
     });
-    
+
     // If any image is a Cloudinary URL, consider it as using cloud storage
     return allImages.some(img => CloudinaryService.isCloudinaryUrl(img));
   }
