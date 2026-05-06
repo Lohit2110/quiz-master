@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { cloudSync } from '../services/CloudSyncService';
-import { localFileSystem } from '../services/LocalFileSystemService';
+
 import { realTimeQuizService } from '../services/RealTimeQuizService';
 
 interface User {
@@ -22,6 +22,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (passcode: string, studentInfo?: any) => boolean;
+  googleLogin: (googleUser: { uid: string; name: string; email: string; photoURL?: string }) => boolean;
   logout: () => void;
   isLoggedIn: boolean;
   isTeacher: boolean;
@@ -143,6 +144,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return false;
   };
 
+  const googleLogin = (
+    googleUser: { uid: string; name: string; email: string; photoURL?: string }
+  ): boolean => {
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const deviceInfo = `${navigator.platform} - ${navigator.userAgent.substring(0, 50)}...`;
+
+    const studentInfo = {
+      name: googleUser.name,
+      email: googleUser.email,
+      phone: '',
+      class: '',
+    };
+
+    const newUser: User = {
+      id: googleUser.uid,
+      role: 'student',
+      passcode: 'google-oauth',
+      loginTime: Date.now(),
+      sessionId,
+      deviceInfo,
+      lastActivity: Date.now(),
+      studentInfo,
+    };
+
+    setUser(newUser);
+    localStorage.setItem('quiz_master_user', JSON.stringify(newUser));
+
+    // Register student for real-time quiz updates
+    realTimeQuizService.registerStudent(newUser.id, {
+      id: newUser.id,
+      name: studentInfo.name,
+      email: studentInfo.email,
+      phone: '',
+      class: '',
+      loginTime: Date.now(),
+      sessionId,
+    }, (quizzes) => {
+      console.log(`📚 Received ${quizzes.length} quizzes from real-time service`);
+      window.dispatchEvent(new CustomEvent('realTimeQuizUpdate', {
+        detail: { quizzes, studentCount: realTimeQuizService.getActiveStudentsCount() },
+      }));
+    });
+
+    return true;
+  };
+
   const logout = () => {
     if (user && user.role === 'student') {
       // Unregister student from real-time updates
@@ -172,6 +219,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const authValue: AuthContextType = {
     user,
     login,
+    googleLogin,
     logout,
     isLoggedIn: !!user,
     isTeacher: user?.role === 'teacher' || user?.role === 'admin',
